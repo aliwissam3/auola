@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>خواطر كافيه | Khwatr Coffee</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="shortcut icon" href="logo.png" type="image/x-icon">
+</head>
+<body>
+
+<header class="navbar">
+  <div class="nav-container">
+    <div class="logo-box">
+        <span class="logo-ar">
+            <img src="logo.png" alt="لوجو خواطر كافيه" class="my-custom-logo">
+        </span>
+        <span class="logo-en">Khwatr Coffee</span>
+    </div>
+
+    <nav class="nav-links" id="navLinks">
+      <a href="#home" class="nav-link active" data-page="home">الرئيسية</a>
+      <a href="#booking" class="nav-link" data-page="booking">الحجز</a>
+      <a href="#gallery" class="nav-link" data-page="gallery">المعرض</a>
+      <a href="#contact" class="nav-link" data-page="contact">تواصل معنا</a>
+    </nav>
+
+    <div class="nav-actions">
+      <button class="lang-btn">EN <span class="globe">🌐</span></button>
+      <button class="btn btn-primary" id="bookNowBtn">احجز الآن</button>
+      <button class="hamburger" id="hamburger">☰</button>
+    </div>
+  </div>
+</header>
+
+<section id="home" class="page active-page">
+  <div class="hero">
+    <div class="hero-overlay"></div>
+    <div class="hero-content">
+      <h1 class="hero-logo"><img src="logo.png" alt="لوكو كافيه"></h1>
+      <p class="hero-tagline">راقي، هادئ، ومصمم لأفضل تجربة كافيه في الموصل</p>
+      <div class="hero-buttons">
+        <button class="btn btn-outline" id="menuBtn">تصفح المنيو </button>
+        <button class="btn btn-primary" id="reserveBtn">احجز الآن </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="floors-section">
+    <div class="floor-card">
+      <img src="image.1.jpg" alt="طابق العوائل">
+      <span class="floor-label">طابق العوائل</span>
+    </div>
+    <div class="floor-card">
+      <img src="image.2.jpg" alt="طابق الشباب">
+      <span class="floor-label">طابق الشباب</span>
+    </div>
+  </div>
+
+  <div class="why-section">
+    <h2>لماذا خواطر؟</h2>
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon">🌟</div>
+        <h3>خدمة ممتازة</h3>
+        <p>فريق محترف يهتم بأدق التفاصيل</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🪑</div>
+        <h3>جلسات راقية</h3>
+        <p>تصميم داخلي عصري وفخم</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">⚡</div>
+        <h3>إنترنت سريع</h3>
+        <p>اتصال عالي السرعة لعملك وترفيهك</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">☕</div>
+        <h3>أجواء هادئة</h3>
+        <p>بيئة مريحة مثالية للاسترخاء والعمل</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="booking" class="page">
+  <div class="booking-wrapper">
+    <div class="booking-step active-step" id="step1">
+      <div class="steps-indicator">
+        <span class="step-dot">3</span>
+        <span class="step-line"></span>
+        <span class="step-dot">2</span>
+        <span class="step-line"></span>
+        <span class="step-dot active">1</span>
+      </div>
+      <h2>حجز طاولة</h2>
+      <p class="step-sub">اختر نوع الجلسة</p>
+      <div class="seating-options">
+        <button class="seating-card" data-type="عوائل">
+          <span class="seating-icon">🏠</span>
+          <span>عوائل</span>
+        </button>
+        <button class="seating-card" data-type="شباب">
+          <span class="seating-icon">👥</span>
+          <span>شباب</span>
+        </button>
+      </div>
+      <button class="btn btn-primary btn-wide" id="toStep2">التالي &lt;</button>
+    </div>
+
+    <div class="booking-step" id="step2">
+      <div class="steps-indicator">
+        <span class="step-dot">3</span>
+        <span class="step-line"></span>
+        <span class="step-dot active">2</span>
+        <span class="step-line active"></span>
+        <span class="step-dot done">1</span>
+      </div>
+      <h2>حجز طاولة</h2>
+      <p class="step-sub">اختر التاريخ والوقت</p>
+      <div class="form-fields">
+        <input type="date" id="bookingDate" class="input-field">
+        <input type="time" id="bookingTime" class="input-field">
+        <input type="number" min="1" placeholder="عدد الأشخاص" class="input-field" id="guestCount">
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-secondary" id="backToStep1">رجوع</button>
+        <button class="btn btn-primary btn-wide" id="toStep3">التالي &lt;</button>
+      </div>
+    </div>
+
+    <div class="booking-step" id="step3">
+      <div class="steps-indicator">
+        <span class="step-dot active">3</span>
+        <span class="step-line active"></span>
+        <span class="step-dot done">2</span>
+        <span class="step-line active"></span>
+        <span class="step-dot done">1</span>
+      </div>
+      <div class="whatsapp-icon">💬</div>
+      <div class="form-fields">
+        <input type="text" placeholder="الاسم" class="input-field" id="bookingName">
+        <input type="tel" placeholder="رقم الهاتف" class="input-field" id="bookingPhone">
+        <textarea placeholder="طلب مسبق" class="input-field textarea-field" id="bookingRequest"></textarea>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-secondary" id="backToStep2">رجوع</button>
+        <button class="btn btn-primary btn-wide" id="sendWhatsapp">إرسال رسالة عبر واتساب 💬</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="gallery" class="page">
+  <div class="gallery-header">
+    <h2>معرض الصور</h2>
+    <p>أطباقنا وأشربتنا — بعدسة خواطر</p>
+  </div>
+  <div class="gallery-grid" id="galleryGrid"></div>
+</section>
+
+<section id="contact" class="page">
+  <div class="contact-wrapper">
+    <h2>تواصل معنا</h2>
+    <div class="contact-grid">
+      <div class="contact-form-box">
+        <div class="whatsapp-icon">💬</div>
+        <div class="form-fields">
+          <input type="text" placeholder="الاسم" class="input-field" id="contactName">
+          <input type="tel" placeholder="رقم الهاتف" class="input-field" id="contactPhone">
+          <textarea placeholder="كيف نقدر نساعدك؟" class="input-field textarea-field" id="contactMessage"></textarea>
+        </div>
+        <button class="btn btn-primary btn-wide" id="sendContactWhatsapp">إرسال رسالة عبر واتساب 💬</button>
+      </div>
+      <div class="map-box">
+        <iframe
+          src="https://maps.google.com/maps?q=Mosul,Iraq&t=&z=15&ie=UTF8&iwloc=&output=embed"
+          width="100%" height="100%" style="border:0; border-radius:12px;"
+          allowfullscreen="" loading="lazy">
+        </iframe>
+      </div>
+    </div>
+
+    <div class="contact-info-grid">
+      <div class="info-item">
+        <span class="info-icon">📍</span>
+        <span>الموصل — المصارف — قرب جامع د. سعدي مهدي</span>
+      </div>
+      <div class="info-item">
+        <span class="info-icon">📞</span>
+        <span>07508188655 <br> 07710834049</span>
+      </div>
+      <div class="info-item">
+        <span class="info-icon">📷</span>
+        <span>@khwatr_coffee</span>
+      </div>
+      <div class="info-item">
+        <span class="info-icon">🕐</span>
+        <span>ساعات العمل <br> يومياً من 10 صباحاً حتى 12 منتصف الليل</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer class="site-footer">
+  <div class="footer-logo">
+      <img src="logo.png" alt="لوجو خواطر" style="height: 60px; width: auto; margin-bottom: 10px;">
+  </div>
+  <div class="footer-title">خواطر كافيه</div>
+  <div class="footer-title-en">Khwatr Coffee</div>
+  <div class="footer-links">
+    <a href="#home">الرئيسية</a>
+    <a href="#gallery">المعرض</a>
+    <a href="#contact">تواصل معنا</a>
+    <a href="#booking">احجز الآن</a>
+  </div>
+  <div class="footer-address">
+    <span>📍 الموصل — المصارف — قرب جامع د. سعدي مهدي</span>
+  </div>
+  <div class="footer-copyright">Khwatr Plus Coffee. All rights reserved. 2026©</div>
+</footer>
+
+<script src="script.js"></script>
+</body>
+</html>
