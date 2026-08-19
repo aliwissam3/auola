@@ -1,0 +1,1216 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>صيدليتي – نظام إدارة الصيدلية</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', 'Tajawal', Tahoma, sans-serif; }
+    body { background: #f0f4f9; color: #1a2332; }
+    :root {
+        --primary: #0f6e5e;
+        --primary-light: #14a085;
+        --success: #27ae60;
+        --danger: #e74c3c;
+        --warning: #f39c12;
+        --bg-sidebar: #0b2019;
+        --bg-card: #ffffff;
+        --border-light: #e2e8f0;
+        --text-dark: #1a2332;
+        --text-muted: #5a7b9c;
+    }
+
+    /* ===== شاشة القفل ===== */
+    #lockScreen {
+        position: fixed; inset: 0; z-index: 2000; display: flex; align-items: center; justify-content: center;
+        background: radial-gradient(circle at 30% 20%, #123b32, #08140f 70%);
+    }
+    .lock-card {
+        background: #fff; width: 92%; max-width: 380px; border-radius: 22px; padding: 34px 28px;
+        text-align: center; box-shadow: 0 24px 60px rgba(0,0,0,0.4);
+    }
+    .lock-card .lock-icon { font-size: 52px; margin-bottom: 6px; }
+    .lock-card h2 { color: #0b2019; margin-bottom: 4px; }
+    .lock-card p { color: var(--text-muted); font-size: 13px; margin-bottom: 20px; }
+    .lock-card input {
+        width: 100%; padding: 13px 16px; border: 2px solid #dce4ec; border-radius: 12px; font-size: 18px;
+        letter-spacing: 4px; text-align: center; margin-bottom: 12px; outline: none;
+    }
+    .lock-card input:focus { border-color: var(--primary-light); }
+    .lock-card .btn { width: 100%; padding: 12px; font-size: 15px; }
+    .lock-error { color: var(--danger); font-size: 13px; min-height: 18px; margin-bottom: 8px; }
+    .lock-hint { color: var(--text-muted); font-size: 12px; margin-top: 14px; }
+
+    /* ===== التطبيق ===== */
+    .app { display: none; flex-direction: row; height: 100vh; overflow: hidden; }
+    .app.active { display: flex; }
+
+    .sidebar {
+        width: 260px; background: var(--bg-sidebar); color: #e2e8f0; display: flex; flex-direction: column;
+        padding: 20px 12px; overflow-y: auto; flex-shrink: 0;
+    }
+    .sidebar .brand { text-align: center; padding: 8px 0 20px; border-bottom: 1px solid #16342b; }
+    .sidebar .brand h2 { font-size: 24px; letter-spacing: 1px; font-weight: 800; color: #fff; }
+    .sidebar .brand small { color: #8ea8a0; font-size: 12px; }
+    .sidebar .menu { list-style: none; margin-top: 15px; flex: 1; }
+    .sidebar .menu li {
+        padding: 12px 16px; margin-bottom: 4px; border-radius: 12px; cursor: pointer; transition: 0.2s;
+        display: flex; align-items: center; gap: 12px; font-size: 15px; color: #cbd5e1;
+    }
+    .sidebar .menu li i { width: 24px; text-align: center; font-style: normal; }
+    .sidebar .menu li:hover { background: #16342b; color: #fff; }
+    .sidebar .menu li.active { background: var(--primary-light); color: #fff; font-weight: 600; box-shadow: 0 4px 12px rgba(20,160,133,0.35); }
+    .sidebar .user-area { border-top: 1px solid #16342b; padding-top: 14px; margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+    .sidebar .user-area .user-row { display: flex; align-items: center; gap: 10px; padding: 8px 14px; background: #16342b; border-radius: 30px; font-size: 14px; }
+    .sidebar .lock-btn {
+        background: transparent; border: 1px solid #2a4a40; color: #cbd5e1; padding: 8px 14px; border-radius: 30px;
+        cursor: pointer; font-size: 13px; text-align: center;
+    }
+    .sidebar .lock-btn:hover { background: #16342b; color: #fff; }
+
+    .main-content { flex: 1; padding: 25px 30px; overflow-y: auto; background: #f0f4f9; }
+    .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 22px; flex-wrap: wrap; gap: 12px; }
+    .page-header h1 { font-size: 26px; font-weight: 700; color: #0f172a; }
+    .page-header .badge { background: var(--primary-light); color: #fff; padding: 6px 18px; border-radius: 30px; font-size: 14px; font-weight: 500; }
+
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 18px; margin-bottom: 28px; }
+    .stat-card { background: var(--bg-card); padding: 20px 18px; border-radius: 18px; border: 1px solid var(--border-light); box-shadow: 0 2px 8px rgba(0,0,0,0.03); transition: 0.2s; }
+    .stat-card:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0,0,0,0.06); }
+    .stat-card .label { font-size: 13px; color: var(--text-muted); margin-bottom: 4px; }
+    .stat-card .number { font-size: 26px; font-weight: 700; color: var(--text-dark); }
+    .stat-card .sub { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+    .stat-card .icon { float: left; font-size: 28px; opacity: 0.25; }
+    .stat-card.alert .number { color: var(--danger); }
+    .stat-card.warn .number { color: var(--warning); }
+
+    .card { background: var(--bg-card); border-radius: 18px; padding: 22px 24px; border: 1px solid var(--border-light); margin-bottom: 24px; box-shadow: 0 2px 6px rgba(0,0,0,0.02); }
+    .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; flex-wrap: wrap; gap: 10px; }
+    .card-header h3 { font-size: 20px; font-weight: 600; color: #0f172a; }
+
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th { text-align: right; padding: 12px 8px; border-bottom: 2px solid var(--border-light); color: #1e293b; font-weight: 600; white-space: nowrap; }
+    td { padding: 12px 8px; border-bottom: 1px solid #edf2f7; }
+    tr:hover td { background: #f8faff; }
+    tr.row-expired td { background: #fde8e8 !important; }
+    tr.row-near td { background: #fff6e5 !important; }
+    .rx-badge { background: var(--danger); color: #fff; font-size: 10px; padding: 2px 7px; border-radius: 20px; font-weight: 700; }
+
+    .form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; margin-bottom: 16px; }
+    .form-group { display: flex; flex-direction: column; }
+    .form-group label { font-size: 13px; font-weight: 600; color: #1e293b; margin-bottom: 4px; }
+    .form-group input, .form-group select {
+        padding: 10px 14px; border: 2px solid #dce4ec; border-radius: 12px; font-size: 14px; background: #fafcff; outline: none; transition: 0.2s;
+    }
+    .form-group input:focus, .form-group select:focus { border-color: var(--primary-light); background: #fff; }
+    .form-group.checkbox-row { flex-direction: row; align-items: center; gap: 8px; padding-top: 22px; }
+    .form-group.checkbox-row input { width: 18px; height: 18px; }
+
+    .btn { padding: 8px 20px; border: none; border-radius: 12px; font-weight: 600; font-size: 14px; cursor: pointer; transition: 0.15s; display: inline-flex; align-items: center; gap: 6px; }
+    .btn-primary { background: var(--primary-light); color: #fff; }
+    .btn-primary:hover { background: var(--primary); }
+    .btn-success { background: var(--success); color: #fff; }
+    .btn-success:hover { background: #1e8449; }
+    .btn-danger { background: var(--danger); color: #fff; }
+    .btn-danger:hover { background: #c0392b; }
+    .btn-warning { background: var(--warning); color: #fff; }
+    .btn-warning:hover { background: #d68910; }
+    .btn-dark { background: #333; color: #fff; }
+    .btn-sm { padding: 4px 12px; font-size: 12px; border-radius: 8px; }
+
+    .search-bar { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+    .search-bar input, .search-bar select { flex: 1; min-width: 160px; padding: 12px 18px; border: 2px solid #dce4ec; border-radius: 30px; font-size: 14px; background: #fafcff; outline: none; }
+    .search-bar input:focus, .search-bar select:focus { border-color: var(--primary-light); }
+
+    .hidden { display: none !important; }
+    .chart-container { max-width: 100%; height: 220px; margin: 12px 0; }
+    .cart-price-input { width: 80px; padding: 4px 6px; border-radius: 8px; border: 1px solid #dce4ec; text-align: center; }
+
+    .notif-bell { position: relative; cursor: pointer; font-size: 24px; user-select: none; line-height: 1; }
+    .notif-badge {
+        position: absolute; top: -8px; left: -10px; background: var(--danger); color: #fff; font-size: 11px; font-weight: 700;
+        padding: 2px 6px; border-radius: 10px; min-width: 18px; text-align: center; box-shadow: 0 0 0 2px #fff;
+    }
+    .notif-bell.has-alerts { animation: notifShake 1.6s ease-in-out infinite; }
+    @keyframes notifShake {
+        0%, 85%, 100% { transform: rotate(0); }
+        88% { transform: rotate(-12deg); } 91% { transform: rotate(10deg); } 94% { transform: rotate(-8deg); } 97% { transform: rotate(6deg); }
+    }
+    .notif-panel {
+        position: absolute; top: 38px; left: 0; width: 320px; max-height: 380px; overflow-y: auto; background: #fff;
+        border: 1px solid var(--border-light); border-radius: 16px; box-shadow: 0 16px 40px rgba(0,0,0,0.18); z-index: 999; padding: 10px; cursor: default;
+    }
+    .notif-panel-header { font-weight: 700; padding: 6px 8px 10px; border-bottom: 1px solid var(--border-light); margin-bottom: 8px; color: #0f172a; font-size: 15px; }
+    .notif-item { padding: 10px 10px; border-radius: 12px; margin-bottom: 6px; font-size: 13px; cursor: pointer; transition: 0.15s; background: #f8faff; line-height: 1.7; }
+    .notif-item:hover { background: #eef4ff; transform: translateX(-2px); }
+    .notif-item.debt { border-right: 4px solid var(--warning); }
+    .notif-item.near { border-right: 4px solid #e67e22; }
+    .notif-item.expired { border-right: 4px solid var(--danger); }
+    .notif-item .n-title { font-weight: 700; color: #0f172a; }
+    .notif-item .n-sub { color: var(--text-muted); font-size: 12px; }
+    .notif-empty { text-align: center; color: #999; padding: 24px 0; font-size: 13px; }
+
+    @media (max-width: 820px) {
+        .sidebar { width: 70px; padding: 10px 4px; }
+        .sidebar .brand h2, .sidebar .brand small, .sidebar .menu li span, .sidebar .user-area .user-row span, .sidebar .lock-btn span { display: none; }
+        .sidebar .menu li { justify-content: center; padding: 12px; }
+        .main-content { padding: 15px; }
+        .stats-grid { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 500px) { .stats-grid { grid-template-columns: 1fr; } .form-grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<!-- ===================== شاشة القفل ===================== -->
+<div id="lockScreen">
+    <div class="lock-card">
+        <div class="lock-icon">💊</div>
+        <h2 id="lockTitle">صيدليتي</h2>
+        <p id="lockSub">أدخل كلمة المرور للدخول</p>
+        <input type="password" id="lockInput" inputmode="numeric" placeholder="••••" maxlength="12">
+        <input type="password" id="lockInputConfirm" placeholder="تأكيد كلمة المرور" class="hidden" maxlength="12">
+        <div class="lock-error" id="lockError"></div>
+        <button class="btn btn-primary" id="lockBtn" style="width:100%;justify-content:center;">دخول</button>
+        <div class="lock-hint">هذا التطبيق يعمل بالكامل بدون إنترنت، وبياناته محفوظة على هذا الجهاز فقط.</div>
+    </div>
+</div>
+
+<!-- ===================== التطبيق ===================== -->
+<div class="app" id="appContainer">
+    <aside class="sidebar">
+        <div class="brand">
+            <h2>💊 صيدليتي</h2>
+            <small>نظام إدارة الصيدلية</small>
+        </div>
+        <ul class="menu" id="mainMenu">
+            <li class="active" data-tab="dashboard"><i>🏠</i> <span>لوحة التحكم</span></li>
+            <li data-tab="sales"><i>🛒</i> <span>بيع سريع</span></li>
+            <li data-tab="inventory"><i>📦</i> <span>الأدوية والمخزون</span></li>
+            <li data-tab="customers"><i>👥</i> <span>العملاء</span></li>
+            <li data-tab="debts"><i>💰</i> <span>الديون</span></li>
+            <li data-tab="reports"><i>📈</i> <span>التقارير</span></li>
+            <li data-tab="settings"><i>⚙️</i> <span>الإعدادات</span></li>
+        </ul>
+        <div class="user-area">
+            <div class="user-row"><span>👤</span> <span>صاحب الصيدلية</span></div>
+            <button class="lock-btn" onclick="lockApp()">🔒 <span>قفل التطبيق</span></button>
+        </div>
+    </aside>
+
+    <main class="main-content">
+        <div class="page-header">
+            <h1 id="pageTitleText">لوحة التحكم</h1>
+            <div style="display:flex;align-items:center;gap:16px;">
+                <div class="notif-bell" id="notifBell" onclick="toggleNotifPanel()">
+                    🔔
+                    <span class="notif-badge" id="notifBadge" style="display:none;">0</span>
+                    <div class="notif-panel" id="notifPanel" style="display:none;">
+                        <div class="notif-panel-header">🔔 التنبيهات</div>
+                        <div id="notifList"></div>
+                    </div>
+                </div>
+                <span class="badge" id="dateBadge">اليوم</span>
+            </div>
+        </div>
+
+        <!-- ===================== لوحة التحكم ===================== -->
+        <div id="section-dashboard" class="section">
+            <div class="stats-grid" id="statsGrid">
+                <div class="stat-card"><div class="icon">💰</div><div class="label">مبيعات اليوم</div><div class="number" id="statSales">0</div><div class="sub">د.ع</div></div>
+                <div class="stat-card"><div class="icon">📈</div><div class="label">صافي الربح اليوم</div><div class="number" id="statProfit">0</div><div class="sub">د.ع</div></div>
+                <div class="stat-card warn"><div class="icon">⚠️</div><div class="label">نواقص المخزون</div><div class="number" id="statLowStock">0</div><div class="sub">أدوية كميتها منخفضة</div></div>
+                <div class="stat-card warn"><div class="icon">⏳</div><div class="label">قاربت على الانتهاء</div><div class="number" id="statNearExpiry">0</div><div class="sub">خلال 90 يوم</div></div>
+                <div class="stat-card alert"><div class="icon">⛔</div><div class="label">منتهية الصلاحية</div><div class="number" id="statExpired">0</div><div class="sub">يجب سحبها من الرف</div></div>
+            </div>
+            <div class="card">
+                <div class="card-header"><h3>📊 المبيعات اليومية (آخر 7 أيام)</h3></div>
+                <div class="chart-container"><canvas id="salesChart"></canvas></div>
+            </div>
+            <div class="card">
+                <div class="card-header"><h3>🕒 مبيعات اليوم (انقر لعرض التفاصيل)</h3></div>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>الوقت</th><th>البيان</th><th>المبلغ</th><th>الربح</th></tr></thead>
+                        <tbody id="dailyReportTable"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===================== بيع سريع ===================== -->
+        <div id="section-sales" class="section hidden">
+            <div class="card">
+                <div class="card-header"><h3>🛒 بيع سريع</h3></div>
+                <div class="search-bar">
+                    <input type="text" id="posSearch" placeholder="ابحث عن دواء بالاسم..." oninput="renderPOS()">
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>الاسم</th><th>التصنيف</th><th>السعر</th><th>المتاح</th><th>الصلاحية</th><th></th></tr></thead>
+                        <tbody id="posProducts"></tbody>
+                    </table>
+                </div>
+                <hr style="margin:22px 0;">
+                <h4>🧾 سلة البيع</h4>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>الدواء</th><th>الكمية</th><th>السعر</th><th>المجموع</th><th></th></tr></thead>
+                        <tbody id="posCart"></tbody>
+                    </table>
+                </div>
+                <div style="display:flex;justify-content:space-between;font-size:20px;font-weight:700;margin:12px 0;">
+                    <span>المجموع الكلي:</span> <span id="posTotal">0</span>
+                </div>
+                <div style="margin-top:5px;">
+                    <label style="font-size:13px;color:var(--text-muted);display:block;margin-bottom:5px;">طريقة الدفع:</label>
+                    <div style="display:flex;gap:8px;">
+                        <button type="button" id="posCashBtn" class="btn btn-success btn-sm" onclick="setPosPayment('كاش')">كاش</button>
+                        <button type="button" id="posDebtBtn" class="btn btn-dark btn-sm" onclick="setPosPayment('دين')">دين (آجل)</button>
+                    </div>
+                </div>
+                <div id="posDebtGroup" style="margin-top:15px;display:none;">
+                    <div class="form-grid">
+                        <div class="form-group"><label>اسم الزبون</label><input type="text" id="posDebtCustomer" placeholder="اسم الزبون"></div>
+                        <div class="form-group"><label>رقم الهاتف</label><input type="text" id="posDebtPhone" placeholder="رقم الهاتف"></div>
+                        <div class="form-group"><label>موعد التسديد</label><input type="date" id="posDebtDueDate"></div>
+                        <div class="form-group"><label>ملاحظة</label><input type="text" id="posDebtNote" placeholder="ملاحظة"></div>
+                    </div>
+                </div>
+                <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:15px;">
+                    <button class="btn btn-success" onclick="checkoutPOS()">✅ إتمام البيع</button>
+                    <button class="btn btn-warning" onclick="clearCart()">🗑️ تفريغ السلة</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===================== الأدوية والمخزون ===================== -->
+        <div id="section-inventory" class="section hidden">
+            <div class="card">
+                <div class="card-header"><h3>➕ إضافة دواء جديد</h3></div>
+                <div class="form-grid">
+                    <div class="form-group"><label>اسم الدواء</label><input type="text" id="invName" placeholder="مثال: بنادول"></div>
+                    <div class="form-group"><label>المادة الفعالة (اختياري)</label><input type="text" id="invGeneric" placeholder="مثال: باراسيتامول"></div>
+                    <div class="form-group"><label>التصنيف</label>
+                        <select id="invCat">
+                            <option value="مسكنات">مسكنات</option>
+                            <option value="مضادات حيوية">مضادات حيوية</option>
+                            <option value="فيتامينات ومكملات">فيتامينات ومكملات</option>
+                            <option value="أدوية القلب والضغط">أدوية القلب والضغط</option>
+                            <option value="أدوية السكري">أدوية السكري</option>
+                            <option value="أدوية الجهاز الهضمي">أدوية الجهاز الهضمي</option>
+                            <option value="أدوية الأطفال">أدوية الأطفال</option>
+                            <option value="مستحضرات جلدية">مستحضرات جلدية</option>
+                            <option value="مستلزمات طبية">مستلزمات طبية</option>
+                            <option value="أخرى">أخرى</option>
+                        </select>
+                    </div>
+                    <div class="form-group"><label>الشركة المصنعة (اختياري)</label><input type="text" id="invManufacturer" placeholder="اختياري"></div>
+                    <div class="form-group"><label>الوحدة</label>
+                        <select id="invUnit">
+                            <option value="علبة">علبة</option>
+                            <option value="شريط">شريط</option>
+                            <option value="حبة">حبة</option>
+                            <option value="زجاجة">زجاجة</option>
+                            <option value="أنبوب">أنبوب</option>
+                            <option value="كيس">كيس</option>
+                            <option value="أمبولة">أمبولة</option>
+                        </select>
+                    </div>
+                    <div class="form-group"><label>سعر الشراء (د.ع)</label><input type="text" id="invBuy" onkeydown="handleWordNumberKey(event,this)" onblur="parseWordNumber(this)"></div>
+                    <div class="form-group"><label>سعر البيع (د.ع)</label><input type="text" id="invSell" onkeydown="handleWordNumberKey(event,this)" onblur="parseWordNumber(this)"></div>
+                    <div class="form-group"><label>الكمية</label><input type="text" id="invQty" class="qty" onkeydown="handleWordNumberKey(event,this)" onblur="parseWordNumber(this)"></div>
+                    <div class="form-group"><label>رقم الدفعة (اختياري)</label><input type="text" id="invBatch" placeholder="اختياري"></div>
+                    <div class="form-group"><label>تاريخ الصلاحية</label><input type="date" id="invExpiry"></div>
+                    <div class="form-group checkbox-row"><input type="checkbox" id="invRx"><label style="padding:0;">يتطلب وصفة طبية</label></div>
+                    <div class="form-group"><label>ملاحظة</label><input type="text" id="invNote" placeholder="ملاحظة"></div>
+                </div>
+                <button class="btn btn-primary" onclick="addInventoryItem()">💾 حفظ الدواء</button>
+            </div>
+            <div class="card">
+                <div class="card-header"><h3>📦 المخزون الحالي</h3><button class="btn btn-warning btn-sm" onclick="exportInventoryCSV()">📤 تصدير CSV</button></div>
+                <div class="search-bar">
+                    <input type="text" id="invSearch" placeholder="بحث بالاسم..." oninput="renderInventory()">
+                    <select id="invFilter" onchange="renderInventory()">
+                        <option value="all">كل الأدوية</option>
+                        <option value="low">نواقص المخزون فقط</option>
+                        <option value="near">قاربت على الانتهاء فقط</option>
+                        <option value="expired">منتهية الصلاحية فقط</option>
+                    </select>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>الاسم</th><th>التصنيف</th><th>الوحدة</th><th>شراء</th><th>بيع</th><th>الكمية</th><th>الصلاحية</th><th>وصفة</th><th>إجراء</th></tr></thead>
+                        <tbody id="inventoryTable"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-header"><h3>🔻 المسحوبات (المواد المباعة اليوم)</h3></div>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>الوقت</th><th>اسم الدواء</th><th>الكمية</th><th>سعر البيع الإجمالي</th></tr></thead>
+                        <tbody id="dailyWithdrawalsBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===================== العملاء ===================== -->
+        <div id="section-customers" class="section hidden">
+            <div class="card">
+                <div class="card-header"><h3>👤 إضافة عميل</h3></div>
+                <div class="form-grid">
+                    <div class="form-group"><label>الاسم</label><input type="text" id="custName" placeholder="الاسم الكامل"></div>
+                    <div class="form-group"><label>الهاتف</label><input type="text" id="custPhone" placeholder="رقم الهاتف"></div>
+                    <div class="form-group"><label>العنوان</label><input type="text" id="custAddress" placeholder="العنوان"></div>
+                </div>
+                <button class="btn btn-primary" onclick="addCustomer()">➕ إضافة عميل</button>
+            </div>
+            <div class="card">
+                <div class="card-header"><h3>📋 قائمة العملاء</h3></div>
+                <div class="search-bar"><input type="text" id="custSearch" placeholder="بحث..." oninput="renderCustomers()"></div>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>الاسم</th><th>الهاتف</th><th>العنوان</th><th>إجراء</th></tr></thead>
+                        <tbody id="customersTable"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===================== الديون ===================== -->
+        <div id="section-debts" class="section hidden">
+            <div class="card">
+                <div class="card-header"><h3>💰 سجل الديون (البيع الآجل)</h3></div>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>التاريخ</th><th>العميل</th><th>الهاتف</th><th>التفاصيل</th><th>المبلغ الإجمالي</th><th>المتبقي</th><th>إجراء</th></tr></thead>
+                        <tbody id="debtsTable"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===================== التقارير ===================== -->
+        <div id="section-reports" class="section hidden">
+            <div class="card">
+                <div class="card-header"><h3>📊 تقارير وطباعة</h3></div>
+                <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:18px;">
+                    <button class="btn btn-primary" onclick="generateDailyReport()">📅 تقرير اليوم</button>
+                    <button class="btn btn-success" onclick="generateMonthlyReport()">📆 تقرير الشهر</button>
+                    <button class="btn btn-warning" onclick="printTodayReport()">🖨️ طباعة تقرير اليوم</button>
+                    <button class="btn" style="background:#1abc9c;color:#fff;" onclick="printMonthlyReport()">🖨️ طباعة تقرير الشهر</button>
+                </div>
+                <div id="reportOutput" style="background:#fafcff;padding:18px;border-radius:14px;border:1px solid var(--border-light);min-height:100px;font-size:14px;white-space:pre-wrap;font-family:monospace;"></div>
+            </div>
+        </div>
+
+        <!-- ===================== الإعدادات ===================== -->
+        <div id="section-settings" class="section hidden">
+            <div class="card">
+                <div class="card-header"><h3>🔐 كلمة مرور التطبيق</h3></div>
+                <div class="form-grid">
+                    <div class="form-group"><label>كلمة المرور الجديدة</label><input type="password" id="newPin" maxlength="12"></div>
+                    <div class="form-group"><label>تأكيد كلمة المرور</label><input type="password" id="newPinConfirm" maxlength="12"></div>
+                </div>
+                <button class="btn btn-primary" onclick="changePin()">💾 تحديث كلمة المرور</button>
+            </div>
+            <div class="card">
+                <div class="card-header"><h3>🗄️ سجل المبيعات حسب اليوم</h3></div>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>التاريخ</th><th>عدد العمليات</th><th>إجمالي المبيعات</th><th>إجمالي الربح</th></tr></thead>
+                        <tbody id="dailyArchiveTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-header"><h3>💾 النسخ الاحتياطي</h3></div>
+                <p style="color:var(--text-muted);font-size:13px;margin-bottom:14px;">التطبيق يعمل بدون إنترنت وبياناته محفوظة على هذا الجهاز فقط داخل المتصفح. خذ نسخة احتياطية بشكل دوري حتى لا تفقد بياناتك.</p>
+                <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;">
+                    <button class="btn btn-warning" onclick="exportFullBackup()">💾 تنزيل نسخة احتياطية</button>
+                    <label class="btn btn-primary" style="cursor:pointer;">📂 استعادة نسخة احتياطية
+                        <input type="file" accept="application/json" id="restoreFileInput" style="display:none;" onchange="importFullBackup(this.files[0])">
+                    </label>
+                </div>
+                <hr style="margin:22px 0;">
+                <button class="btn btn-danger" onclick="clearAllData()">⚠️ حذف كل البيانات نهائياً</button>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script>
+// ========================================================================
+//  صيدليتي – نظام إدارة الصيدلية (يعمل بالكامل بدون إنترنت)
+// ========================================================================
+
+const EXPIRY_WARN_DAYS = 90;
+const LOW_STOCK_QTY = 5;
+
+// =========================== البيانات ===========================
+let inventoryData = JSON.parse(localStorage.getItem('sy_inventory')) || [];
+let customers = JSON.parse(localStorage.getItem('sy_customers')) || [];
+let debtsData = JSON.parse(localStorage.getItem('sy_debts')) || [];
+let dailySalesData = JSON.parse(localStorage.getItem('sy_dailySales')) || [];
+let withdrawalsData = JSON.parse(localStorage.getItem('sy_withdrawals')) || [];
+
+let cart = [];
+let currentPosPaymentType = 'كاش';
+let chartInstance = null;
+
+function saveData() {
+    localStorage.setItem('sy_inventory', JSON.stringify(inventoryData));
+    localStorage.setItem('sy_customers', JSON.stringify(customers));
+    localStorage.setItem('sy_debts', JSON.stringify(debtsData));
+    localStorage.setItem('sy_dailySales', JSON.stringify(dailySalesData));
+    localStorage.setItem('sy_withdrawals', JSON.stringify(withdrawalsData));
+}
+
+// =========================== قفل التطبيق ===========================
+function getTodayISO() {
+    const d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+const lockScreen = document.getElementById('lockScreen');
+const lockInput = document.getElementById('lockInput');
+const lockInputConfirm = document.getElementById('lockInputConfirm');
+const lockError = document.getElementById('lockError');
+const lockBtn = document.getElementById('lockBtn');
+const lockSub = document.getElementById('lockSub');
+
+function isFirstRun() { return !localStorage.getItem('sy_pin'); }
+
+function renderLockScreen() {
+    if (isFirstRun()) {
+        lockSub.textContent = 'أول استخدام: عيّن كلمة مرور لحماية بيانات الصيدلية';
+        lockInputConfirm.classList.remove('hidden');
+        lockInputConfirm.placeholder = 'تأكيد كلمة المرور';
+        lockBtn.textContent = 'تعيين كلمة المرور';
+    } else {
+        lockSub.textContent = 'أدخل كلمة المرور للدخول';
+        lockInputConfirm.classList.add('hidden');
+        lockBtn.textContent = 'دخول';
+    }
+    lockInput.value = ''; lockInputConfirm.value = ''; lockError.textContent = '';
+    lockInput.focus();
+}
+
+lockBtn.addEventListener('click', function() {
+    if (isFirstRun()) {
+        const p1 = lockInput.value.trim(), p2 = lockInputConfirm.value.trim();
+        if (p1.length < 4) { lockError.textContent = 'كلمة المرور يجب أن تكون 4 أحرف/أرقام على الأقل.'; return; }
+        if (p1 !== p2) { lockError.textContent = 'كلمتا المرور غير متطابقتين.'; return; }
+        localStorage.setItem('sy_pin', p1);
+        unlockApp();
+    } else {
+        if (lockInput.value === localStorage.getItem('sy_pin')) {
+            unlockApp();
+        } else {
+            lockError.textContent = 'كلمة المرور غير صحيحة.';
+            lockInput.value = ''; lockInput.focus();
+        }
+    }
+});
+[lockInput, lockInputConfirm].forEach(el => el.addEventListener('keydown', e => { if (e.key === 'Enter') lockBtn.click(); }));
+
+function unlockApp() {
+    sessionStorage.setItem('sy_unlocked', '1');
+    lockScreen.style.display = 'none';
+    document.getElementById('appContainer').classList.add('active');
+    initApp();
+}
+function lockApp() {
+    sessionStorage.removeItem('sy_unlocked');
+    location.reload();
+}
+
+function changePin() {
+    const p1 = document.getElementById('newPin').value.trim();
+    const p2 = document.getElementById('newPinConfirm').value.trim();
+    if (p1.length < 4) return alert('كلمة المرور يجب أن تكون 4 أحرف/أرقام على الأقل.');
+    if (p1 !== p2) return alert('كلمتا المرور غير متطابقتين.');
+    localStorage.setItem('sy_pin', p1);
+    document.getElementById('newPin').value = '';
+    document.getElementById('newPinConfirm').value = '';
+    alert('✅ تم تحديث كلمة المرور.');
+}
+
+if (sessionStorage.getItem('sy_unlocked') === '1' && !isFirstRun()) {
+    unlockApp();
+} else {
+    renderLockScreen();
+}
+
+// =========================== تبديل الأقسام ===========================
+document.querySelectorAll('#mainMenu li').forEach(item => {
+    item.addEventListener('click', function() {
+        document.querySelectorAll('#mainMenu li').forEach(li => li.classList.remove('active'));
+        this.classList.add('active');
+        const tab = this.dataset.tab;
+        document.querySelectorAll('.section').forEach(s => s.classList.add('hidden'));
+        document.getElementById('section-' + tab).classList.remove('hidden');
+        document.getElementById('pageTitleText').textContent = this.innerText.trim();
+        if (tab === 'dashboard') { updateDashboard(); drawChart(); }
+        if (tab === 'inventory') { renderInventory(); renderWithdrawals(); }
+        if (tab === 'customers') renderCustomers();
+        if (tab === 'sales') renderPOS();
+        if (tab === 'debts') renderDebts();
+        if (tab === 'settings') renderDailyArchive();
+    });
+});
+
+// =========================== محرك تحويل الأرقام العربية ===========================
+function parseWordNumber(inputElement) {
+    let text = inputElement.value;
+    if (!text || text.trim() === '') { inputElement.value = ''; return; }
+    let isQty = false;
+    if (inputElement.id && inputElement.id.toLowerCase().includes('qty')) isQty = true;
+    if (inputElement.classList && inputElement.classList.contains('qty')) isQty = true;
+
+    let clean = text.trim().replace(/[،,]/g, '').replace(/\s+/g, ' ').replace(/د\.ع/g, '').replace(/دينار/g, '');
+    if (/^[\d,\.]+$/.test(clean.replace(/,/g, ''))) {
+        let num = parseFloat(clean.replace(/,/g, ''));
+        if (!isNaN(num)) { inputElement.value = num === 0 ? '' : num; return; }
+    }
+    const map = { '٠':'0','١':'1','٢':'2','٣':'3','٤':'4','٥':'5','٦':'6','٧':'7','٨':'8','٩':'9' };
+    let eng = clean.split('').map(ch => map[ch] || ch).join('');
+    let words = eng.split(/\s+/);
+    let total = 0, current = 0, hasTerm = false;
+    const numMap = {
+        'صفر':0,'واحد':1,'اثنان':2,'اثنين':2,'ثلاث':3,'ثلاثة':3,'أربع':4,'أربعة':4,
+        'خمس':5,'خمسة':5,'ست':6,'ستة':6,'سبع':7,'سبعة':7,'ثمان':8,'ثمانية':8,
+        'تسع':9,'تسعة':9,'عشر':10,'عشرة':10,'احدى':1,'احد':1,
+        '٢':2,'٣':3,'٤':4,'٥':5,'٦':6,'٧':7,'٨':8,'٩':9,'١':1,'٠':0,
+        '2':2,'3':3,'4':4,'5':5,'6':6,'7':7,'8':8,'9':9,'1':1,'0':0,
+        '10':10,'11':11,'12':12,'13':13,'14':14,'15':15,'16':16,'17':17,'18':18,'19':19,
+        '20':20,'21':21,'22':22,'23':23,'24':24,'25':25,'26':26,'27':27,'28':28,'29':29,
+        '30':30,'31':31,'32':32,'33':33,'34':34,'35':35,'36':36,'37':37,'38':38,'39':39,
+        '40':40,'41':41,'42':42,'43':43,'44':44,'45':45,'46':46,'47':47,'48':48,'49':49,
+        '50':50,'51':51,'52':52,'53':53,'54':54,'55':55,'56':56,'57':57,'58':58,'59':59,
+        '60':60,'61':61,'62':62,'63':63,'64':64,'65':65,'66':66,'67':67,'68':68,'69':69,
+        '70':70,'71':71,'72':72,'73':73,'74':74,'75':75,'76':76,'77':77,'78':78,'79':79,
+        '80':80,'81':81,'82':82,'83':83,'84':84,'85':85,'86':86,'87':87,'88':88,'89':89,
+        '90':90,'91':91,'92':92,'93':93,'94':94,'95':95,'96':96,'97':97,'98':98,'99':99,
+        'مئة':100,'مية':100
+    };
+    function extractNum(w) {
+        let wl = w.toLowerCase().replace(/[^a-z0-9؀-ۿ]/g,'');
+        if (numMap[wl] !== undefined) return numMap[wl];
+        let m = wl.match(/\d+/);
+        return m ? parseInt(m[0]) : 0;
+    }
+    for (let i=0; i<words.length; i++) {
+        let w = words[i].toLowerCase();
+        if (w.includes('مليون') || w.includes('ملايين')) {
+            let mult = i>0 ? extractNum(words[i-1]) || 1 : 1;
+            total += mult * 1e6; hasTerm=true; current=0;
+        } else if (w.includes('الف') || w.includes('ألف') || w.includes('الاف') || w.includes('آلاف')) {
+            let mult = i>0 ? extractNum(words[i-1]) || 1 : 1;
+            total += mult * 1000; hasTerm=true; current=0;
+        } else if (w.includes('نص') || w.includes('نصف')) {
+            total += 500; hasTerm=true;
+        } else if (w.includes('مية') || w.includes('مائة')) {
+            let mult = i>0 ? extractNum(words[i-1]) || 1 : 1;
+            total += mult * 100; hasTerm=true;
+        } else {
+            let num = extractNum(w);
+            if (num > 0) {
+                if (!hasTerm) { if (num >= 1000) total += num; else current = current * 10 + num; }
+                else total += num;
+                hasTerm = true;
+            }
+        }
+    }
+    if (!hasTerm) {
+        let nums = eng.match(/\d+(\.\d+)?/g);
+        if (nums) {
+            let sum = nums.map(Number).reduce((a,b) => a+b, 0);
+            inputElement.value = sum === 0 ? '' : sum;
+            return;
+        }
+    }
+    if (current > 0 && !hasTerm) total += current;
+    inputElement.value = total === 0 ? '' : total;
+}
+function handleWordNumberKey(e, el) {
+    if (e.key === 'Enter') { e.preventDefault(); parseWordNumber(el); el.blur(); }
+}
+
+// =========================== أدوات الصلاحية ===========================
+function daysUntil(dateStr) {
+    if (!dateStr) return null;
+    const today = new Date(); today.setHours(0,0,0,0);
+    const target = new Date(dateStr); target.setHours(0,0,0,0);
+    return Math.round((target - today) / 86400000);
+}
+function expiryStatus(item) {
+    if (!item.expiry) return 'ok';
+    const d = daysUntil(item.expiry);
+    if (d < 0) return 'expired';
+    if (d <= EXPIRY_WARN_DAYS) return 'near';
+    return 'ok';
+}
+function expiryLabel(item) {
+    if (!item.expiry) return '-';
+    const status = expiryStatus(item);
+    const label = item.expiry;
+    if (status === 'expired') return '⛔ ' + label;
+    if (status === 'near') return '⏳ ' + label;
+    return label;
+}
+
+// =========================== تهيئة التطبيق ===========================
+function initApp() {
+    document.getElementById('dateBadge').textContent = '📅 ' + new Date().toLocaleDateString('ar');
+    updateDashboard();
+    renderInventory();
+    renderWithdrawals();
+    renderCustomers();
+    renderPOS();
+    renderDebts();
+    renderDailyArchive();
+    drawChart();
+    renderNotifications(true);
+    setInterval(() => renderNotifications(false), 5 * 60 * 1000);
+}
+
+// =========================== لوحة التحكم ===========================
+function updateDashboard() {
+    const today = new Date().toLocaleDateString();
+    const daily = dailySalesData.filter(t => t.date === today);
+    const totalSales = daily.reduce((s,t) => s + t.totalAmount, 0);
+    const totalProfit = daily.reduce((s,t) => s + t.profitAmount, 0);
+    const lowStock = inventoryData.filter(p => p.qty <= LOW_STOCK_QTY).length;
+    const nearExpiry = inventoryData.filter(p => p.qty > 0 && expiryStatus(p) === 'near').length;
+    const expired = inventoryData.filter(p => p.qty > 0 && expiryStatus(p) === 'expired').length;
+
+    document.getElementById('statSales').textContent = totalSales.toLocaleString();
+    document.getElementById('statProfit').textContent = totalProfit.toLocaleString();
+    document.getElementById('statLowStock').textContent = lowStock;
+    document.getElementById('statNearExpiry').textContent = nearExpiry;
+    document.getElementById('statExpired').textContent = expired;
+
+    const tbody = document.getElementById('dailyReportTable');
+    tbody.innerHTML = daily.length === 0 ? '<tr><td colspan="4" style="text-align:center;color:#999;">لا توجد مبيعات اليوم</td></tr>' : '';
+    daily.forEach((s, idx) => {
+        tbody.innerHTML += `<tr onclick="showDailySaleDetails(${idx})">
+            <td>${s.time}</td><td>${s.desc}</td><td>${s.totalAmount.toLocaleString()}</td><td>${s.profitAmount.toLocaleString()}</td>
+        </tr>`;
+    });
+}
+function showDailySaleDetails(idx) {
+    const today = new Date().toLocaleDateString();
+    const daily = dailySalesData.filter(t => t.date === today);
+    const item = daily[idx];
+    alert(`📦 التفاصيل:\n${item.desc}\nالمبلغ: ${item.totalAmount}\nالربح: ${item.profitAmount}`);
+}
+
+// =========================== الرسم البياني (بدون أي مكتبات خارجية) ===========================
+function drawChart() {
+    const canvas = document.getElementById('salesChart');
+    const ctx = canvas.getContext('2d');
+    const w = canvas.clientWidth || canvas.parentElement.clientWidth;
+    const h = 220;
+    canvas.width = w; canvas.height = h;
+    ctx.clearRect(0, 0, w, h);
+
+    const labels = [], data = [];
+    for (let i=6; i>=0; i--) {
+        const d = new Date(); d.setDate(d.getDate() - i);
+        const key = d.toLocaleDateString();
+        labels.push(d.toLocaleDateString('ar', { weekday: 'short' }));
+        const dayTotal = dailySalesData.filter(t => t.date === key).reduce((s,t) => s + t.totalAmount, 0);
+        data.push(dayTotal);
+    }
+    const max = Math.max(...data, 1);
+    const padding = 30;
+    const barAreaW = w - padding * 2;
+    const barAreaH = h - padding * 2;
+    const barW = barAreaW / data.length * 0.55;
+    const gap = barAreaW / data.length;
+
+    ctx.strokeStyle = '#e2e8f0';
+    ctx.beginPath(); ctx.moveTo(padding, h - padding); ctx.lineTo(w - 10, h - padding); ctx.stroke();
+
+    data.forEach((val, i) => {
+        const barH = (val / max) * (barAreaH - 10);
+        const x = padding + i * gap + (gap - barW) / 2;
+        const y = h - padding - barH;
+        ctx.fillStyle = '#14a085';
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(x, y, barW, barH, 6); else ctx.rect(x, y, barW, barH);
+        ctx.fill();
+        ctx.fillStyle = '#5a7b9c';
+        ctx.font = '11px Tahoma';
+        ctx.textAlign = 'center';
+        ctx.fillText(labels[i], x + barW/2, h - padding + 16);
+        if (val > 0) {
+            ctx.fillStyle = '#1a2332';
+            ctx.font = 'bold 11px Tahoma';
+            ctx.fillText(val.toLocaleString(), x + barW/2, y - 6);
+        }
+    });
+}
+window.addEventListener('resize', () => { if (!document.getElementById('section-dashboard').classList.contains('hidden')) drawChart(); });
+
+// =========================== المخزون ===========================
+function addInventoryItem() {
+    const name = document.getElementById('invName').value.trim();
+    const generic = document.getElementById('invGeneric').value.trim();
+    const cat = document.getElementById('invCat').value;
+    const manufacturer = document.getElementById('invManufacturer').value.trim();
+    const unit = document.getElementById('invUnit').value;
+    const buy = parseFloat(document.getElementById('invBuy').value);
+    const sell = parseFloat(document.getElementById('invSell').value);
+    const qty = parseInt(document.getElementById('invQty').value);
+    const batch = document.getElementById('invBatch').value.trim();
+    const expiry = document.getElementById('invExpiry').value;
+    const rx = document.getElementById('invRx').checked;
+    const note = document.getElementById('invNote').value.trim();
+    if (!name || isNaN(buy) || isNaN(sell) || isNaN(qty)) {
+        alert('يرجى ملء اسم الدواء وسعر الشراء وسعر البيع والكمية بشكل صحيح.');
+        return;
+    }
+    inventoryData.push({ id: Date.now(), name, generic, cat, manufacturer, unit, buy, sell, qty, batch, expiry, rx, note });
+    saveData();
+    ['invName','invGeneric','invManufacturer','invBuy','invSell','invQty','invBatch','invExpiry','invNote'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('invRx').checked = false;
+    renderInventory();
+    updateDashboard();
+    alert('✅ تمت إضافة الدواء بنجاح.');
+}
+function renderInventory() {
+    const q = document.getElementById('invSearch').value.toLowerCase();
+    const filter = document.getElementById('invFilter').value;
+    let filtered = inventoryData.filter(p => p.name.toLowerCase().includes(q) || (p.generic && p.generic.toLowerCase().includes(q)));
+    if (filter === 'low') filtered = filtered.filter(p => p.qty <= LOW_STOCK_QTY);
+    if (filter === 'near') filtered = filtered.filter(p => expiryStatus(p) === 'near');
+    if (filter === 'expired') filtered = filtered.filter(p => expiryStatus(p) === 'expired');
+    const tbody = document.getElementById('inventoryTable');
+    tbody.innerHTML = filtered.map(p => {
+        const status = expiryStatus(p);
+        const rowClass = status === 'expired' ? 'row-expired' : (status === 'near' ? 'row-near' : '');
+        return `<tr class="${rowClass}">
+            <td>${p.name}${p.generic ? `<br><small style="color:var(--text-muted);">${p.generic}</small>` : ''}</td>
+            <td>${p.cat}</td>
+            <td>${p.unit}</td>
+            <td>${p.buy.toLocaleString()}</td>
+            <td>${p.sell.toLocaleString()}</td>
+            <td style="color:${p.qty<=LOW_STOCK_QTY?'#d32f2f':'#1a2332'}">${p.qty}</td>
+            <td>${expiryLabel(p)}</td>
+            <td>${p.rx ? '<span class="rx-badge">Rx</span>' : '-'}</td>
+            <td><button class="btn btn-danger btn-sm" onclick="deleteInventoryItem(${p.id})">حذف</button></td>
+        </tr>`;
+    }).join('') || '<tr><td colspan="9" style="text-align:center;color:#999;">لا توجد أدوية</td></tr>';
+}
+function deleteInventoryItem(id) {
+    if (confirm('حذف الدواء نهائياً؟')) {
+        inventoryData = inventoryData.filter(p => p.id !== id);
+        saveData();
+        renderInventory();
+        updateDashboard();
+    }
+}
+function exportInventoryCSV() {
+    let csv = 'الاسم,المادة الفعالة,التصنيف,الشركة المصنعة,الوحدة,سعر الشراء,سعر البيع,الكمية,رقم الدفعة,تاريخ الصلاحية,وصفة طبية\n';
+    inventoryData.forEach(p => csv += `${p.name},${p.generic||''},${p.cat},${p.manufacturer||''},${p.unit},${p.buy},${p.sell},${p.qty},${p.batch||''},${p.expiry||''},${p.rx?'نعم':'لا'}\n`);
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'مخزون_الأدوية.csv';
+    link.click();
+}
+
+// =========================== المسحوبات ===========================
+function renderWithdrawals() {
+    const today = new Date().toLocaleDateString();
+    const todays = withdrawalsData.filter(w => w.date === today);
+    const tbody = document.getElementById('dailyWithdrawalsBody');
+    tbody.innerHTML = todays.length === 0 ? '<tr><td colspan="4" style="text-align:center;color:#999;">لا توجد مسحوبات اليوم</td></tr>' : '';
+    todays.forEach(w => {
+        tbody.innerHTML += `<tr><td>${w.time}</td><td>${w.name}</td><td>${w.qty}</td><td>${w.total.toLocaleString()}</td></tr>`;
+    });
+}
+
+// =========================== العملاء ===========================
+function addCustomer() {
+    const name = document.getElementById('custName').value.trim();
+    const phone = document.getElementById('custPhone').value.trim();
+    const address = document.getElementById('custAddress').value.trim();
+    if (!name) { alert('الاسم مطلوب.'); return; }
+    customers.push({ id: Date.now(), name, phone, address });
+    saveData();
+    document.getElementById('custName').value = '';
+    document.getElementById('custPhone').value = '';
+    document.getElementById('custAddress').value = '';
+    renderCustomers();
+}
+function renderCustomers() {
+    const q = document.getElementById('custSearch').value.toLowerCase();
+    const filtered = customers.filter(c => c.name.toLowerCase().includes(q) || c.phone.includes(q));
+    const tbody = document.getElementById('customersTable');
+    tbody.innerHTML = filtered.map(c =>
+        `<tr><td>${c.name}</td><td>${c.phone||'-'}</td><td>${c.address||'-'}</td>
+        <td><button class="btn btn-danger btn-sm" onclick="deleteCustomer(${c.id})">حذف</button></td></tr>`
+    ).join('') || '<tr><td colspan="4" style="text-align:center;color:#999;">لا يوجد عملاء</td></tr>';
+}
+function deleteCustomer(id) {
+    if (confirm('حذف العميل؟')) {
+        customers = customers.filter(c => c.id !== id);
+        saveData();
+        renderCustomers();
+    }
+}
+
+// =========================== نقطة البيع ===========================
+function renderPOS() {
+    const q = document.getElementById('posSearch').value.toLowerCase();
+    const filtered = inventoryData.filter(p => p.qty > 0 && p.name.toLowerCase().includes(q));
+    const tbody = document.getElementById('posProducts');
+    tbody.innerHTML = filtered.map(p =>
+        `<tr><td>${p.name}${p.rx ? ' <span class="rx-badge">Rx</span>' : ''}</td><td>${p.cat}</td><td>${p.sell.toLocaleString()}</td><td>${p.qty}</td><td>${expiryLabel(p)}</td>
+        <td><button class="btn btn-success btn-sm" onclick="addToCart(${p.id})">+</button></td></tr>`
+    ).join('') || '<tr><td colspan="6" style="text-align:center;color:#999;">لا توجد أدوية</td></tr>';
+    renderCart();
+}
+function addToCart(id) {
+    const prod = inventoryData.find(p => p.id === id);
+    if (!prod || prod.qty <= 0) return alert('غير متوفر.');
+    if (expiryStatus(prod) === 'expired') {
+        if (!confirm(`⚠️ هذا الدواء (${prod.name}) منتهي الصلاحية. هل تريد المتابعة؟`)) return;
+    }
+    const existing = cart.find(c => c.id === id);
+    if (existing) { if (existing.qty < prod.qty) existing.qty++; else return alert('الكمية غير كافية.'); }
+    else cart.push({ id: prod.id, name: prod.name, sell: prod.sell, qty: 1, rx: prod.rx });
+    renderCart();
+}
+function renderCart() {
+    const tbody = document.getElementById('posCart');
+    let total = 0;
+    tbody.innerHTML = cart.map((item, idx) => {
+        const line = item.sell * item.qty;
+        total += line;
+        return `<tr><td>${item.name}${item.rx ? ' <span class="rx-badge">Rx</span>' : ''}</td>
+            <td><input type="number" value="${item.qty}" min="1" style="width:60px;padding:4px;" onchange="updateCartQty(${idx}, this.value)"></td>
+            <td>${item.sell.toLocaleString()}</td><td>${line.toLocaleString()}</td>
+            <td><button class="btn btn-danger btn-sm" onclick="removeFromCart(${idx})">✕</button></td></tr>`;
+    }).join('') || '<tr><td colspan="5" style="text-align:center;color:#999;">السلة فارغة</td></tr>';
+    document.getElementById('posTotal').textContent = total.toLocaleString();
+}
+function updateCartQty(idx, val) {
+    const q = parseInt(val);
+    if (q > 0) {
+        const prod = inventoryData.find(p => p.id === cart[idx].id);
+        if (prod && q <= prod.qty) cart[idx].qty = q;
+        else { alert('الكمية غير متوفرة.'); renderCart(); return; }
+    }
+    renderCart();
+}
+function removeFromCart(idx) { cart.splice(idx,1); renderCart(); }
+function clearCart() { if (cart.length && confirm('تفريغ السلة؟')) { cart=[]; renderCart(); } }
+
+function setPosPayment(type) {
+    currentPosPaymentType = type;
+    document.getElementById('posCashBtn').className = 'btn btn-sm ' + (type === 'كاش' ? 'btn-success' : 'btn-dark');
+    document.getElementById('posDebtBtn').className = 'btn btn-sm ' + (type === 'دين' ? 'btn-success' : 'btn-dark');
+    document.getElementById('posDebtGroup').style.display = type === 'دين' ? 'block' : 'none';
+}
+
+function checkoutPOS() {
+    if (cart.length === 0) return alert('السلة فارغة.');
+    const hasRx = cart.some(i => i.rx);
+    if (hasRx && !confirm('⚠️ توجد أدوية في الفاتورة تتطلب وصفة طبية. هل تم التأكد من الوصفة؟')) return;
+
+    const total = cart.reduce((s,i) => s + i.sell * i.qty, 0);
+    const profit = cart.reduce((s,i) => {
+        const prod = inventoryData.find(p => p.id === i.id);
+        return s + (i.sell - (prod ? prod.buy : 0)) * i.qty;
+    }, 0);
+    const now = new Date();
+    const date = now.toLocaleDateString();
+    const time = now.toLocaleTimeString();
+    const desc = cart.map(i => `${i.name} x${i.qty}`).join(', ');
+
+    if (currentPosPaymentType === 'دين') {
+        const customer = document.getElementById('posDebtCustomer').value.trim();
+        const phone = document.getElementById('posDebtPhone').value.trim();
+        const dueDate = document.getElementById('posDebtDueDate').value;
+        const note = document.getElementById('posDebtNote').value.trim();
+        if (!customer) return alert('يرجى إدخال اسم الزبون للبيع الآجل.');
+        cart.forEach(item => {
+            const prod = inventoryData.find(p => p.id === item.id);
+            if (prod) prod.qty -= item.qty;
+            withdrawalsData.push({ date, time, name: item.name, qty: item.qty, total: item.sell * item.qty });
+        });
+        debtsData.push({
+            id: Date.now(), date, customer, phone, dueDate: dueDate || 'غير محدد', note,
+            desc, total, remaining: total, paid: 0, totalProfit: profit
+        });
+        saveData();
+        cart = [];
+        document.getElementById('posDebtCustomer').value = '';
+        document.getElementById('posDebtPhone').value = '';
+        document.getElementById('posDebtDueDate').value = '';
+        document.getElementById('posDebtNote').value = '';
+        setPosPayment('كاش');
+        renderPOS(); renderInventory(); renderWithdrawals(); renderDebts(); updateDashboard(); renderNotifications();
+        alert('✅ تم تسجيل عملية البيع الآجل (الدين) بنجاح.');
+        return;
+    }
+
+    cart.forEach(item => {
+        const prod = inventoryData.find(p => p.id === item.id);
+        if (prod) prod.qty -= item.qty;
+        withdrawalsData.push({ date, time, name: item.name, qty: item.qty, total: item.sell * item.qty });
+    });
+    dailySalesData.push({ date, time, desc, totalAmount: total, profitAmount: profit });
+    saveData();
+    cart = [];
+    setPosPayment('كاش');
+    renderPOS(); renderInventory(); updateDashboard(); renderWithdrawals(); drawChart();
+    alert('✅ تمت عملية البيع بنجاح.');
+}
+
+// =========================== الديون ===========================
+function renderDebts() {
+    const tbody = document.getElementById('debtsTable');
+    const today = getTodayISO();
+    tbody.innerHTML = debtsData.map((d, idx) => {
+        const isDue = d.dueDate && d.dueDate === today;
+        return `<tr${isDue ? ' style="background:#fff6e5;"' : ''}><td>${d.date}</td><td>${d.customer}</td><td>${d.phone||'-'}</td>
+        <td>${d.desc}</td><td>${d.total.toLocaleString()}</td><td>${d.remaining.toLocaleString()}</td>
+        <td><button class="btn btn-success btn-sm" onclick="payDebtAmount(${idx})">تسديد</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteDebtRecord(${idx})">حذف</button></td></tr>`;
+    }).join('') || '<tr><td colspan="7" style="text-align:center;color:#999;">لا توجد ديون</td></tr>';
+}
+function payDebtAmount(idx) {
+    const debt = debtsData[idx];
+    const amount = parseFloat(prompt(`المتبقي: ${debt.remaining}\nأدخل مبلغ التسديد:`));
+    if (isNaN(amount) || amount <= 0) return;
+    if (amount > debt.remaining) return alert('المبلغ أكبر من المتبقي.');
+    debt.remaining -= amount;
+    debt.paid += amount;
+    const profitShare = debt.totalProfit && debt.total ? (amount / debt.total) * debt.totalProfit : 0;
+    const now = new Date();
+    dailySalesData.push({ date: now.toLocaleDateString(), time: now.toLocaleTimeString(), desc: `تسديد دين (${debt.customer})`, totalAmount: amount, profitAmount: profitShare });
+    if (debt.remaining === 0) {
+        debtsData.splice(idx, 1);
+        alert('✅ تم سداد الدين بالكامل.');
+    }
+    saveData();
+    renderDebts();
+    updateDashboard();
+    renderNotifications();
+}
+function deleteDebtRecord(idx) {
+    if (confirm('حذف سجل الدين؟')) {
+        debtsData.splice(idx, 1);
+        saveData();
+        renderDebts();
+        updateDashboard();
+        renderNotifications();
+    }
+}
+
+// =========================== الأرشيف / سجل المبيعات ===========================
+function renderDailyArchive() {
+    const groups = {};
+    dailySalesData.forEach(t => {
+        if (!groups[t.date]) groups[t.date] = { count: 0, total: 0, profit: 0 };
+        groups[t.date].count++;
+        groups[t.date].total += t.totalAmount;
+        groups[t.date].profit += t.profitAmount;
+    });
+    const tbody = document.getElementById('dailyArchiveTableBody');
+    const entries = Object.entries(groups).reverse();
+    tbody.innerHTML = entries.length === 0 ? '<tr><td colspan="4" style="text-align:center;color:#999;">لا توجد بيانات بعد</td></tr>' : '';
+    entries.forEach(([date, g]) => {
+        tbody.innerHTML += `<tr><td>${date}</td><td>${g.count}</td><td>${g.total.toLocaleString()}</td><td>${g.profit.toLocaleString()}</td></tr>`;
+    });
+}
+
+// =========================== التقارير والطباعة ===========================
+function generateDailyReport() {
+    const today = new Date().toLocaleDateString();
+    const daily = dailySalesData.filter(t => t.date === today);
+    let out = `📅 تقرير اليوم (${today})\n`;
+    out += `عدد العمليات: ${daily.length}\n`;
+    out += `إجمالي المبيعات: ${daily.reduce((s,t)=>s+t.totalAmount,0).toLocaleString()} د.ع\n`;
+    out += `إجمالي الأرباح: ${daily.reduce((s,t)=>s+t.profitAmount,0).toLocaleString()} د.ع\n\nالتفاصيل:\n`;
+    daily.forEach(t => out += `- ${t.time}  ${t.desc}  (${t.totalAmount})  ربح: ${t.profitAmount}\n`);
+    document.getElementById('reportOutput').textContent = out;
+}
+function generateMonthlyReport() {
+    const now = new Date();
+    const month = now.getMonth(), year = now.getFullYear();
+    const monthly = dailySalesData.filter(t => {
+        const parts = t.date.split(/[\/\-]/);
+        const d = new Date(t.date);
+        return d.getMonth() === month && d.getFullYear() === year;
+    });
+    let out = `📊 تقرير الشهر (${now.toLocaleDateString('ar',{month:'long',year:'numeric'})})\n`;
+    out += `إجمالي العمليات: ${monthly.length}\n`;
+    out += `إجمالي المبيعات: ${monthly.reduce((s,t)=>s+t.totalAmount,0).toLocaleString()} د.ع\n`;
+    out += `إجمالي الأرباح: ${monthly.reduce((s,t)=>s+t.profitAmount,0).toLocaleString()} د.ع\n\nالتفاصيل اليومية:\n`;
+    const days = {};
+    monthly.forEach(t => { if (!days[t.date]) days[t.date] = {count:0,total:0,profit:0}; days[t.date].count++; days[t.date].total+=t.totalAmount; days[t.date].profit+=t.profitAmount; });
+    for (const [date, data] of Object.entries(days)) {
+        out += `- ${date}: ${data.count} عمليات, مبيعات: ${data.total}, ربح: ${data.profit}\n`;
+    }
+    document.getElementById('reportOutput').textContent = out;
+}
+function printTodayReport() {
+    const today = new Date().toLocaleDateString();
+    const daily = dailySalesData.filter(t => t.date === today);
+    let html = `<html dir="rtl"><head><meta charset="UTF-8"><title>تقرير اليوم</title>
+    <style>body{font-family:Tahoma;padding:20px;background:#fff;color:#000;}table{width:100%;border-collapse:collapse;}th,td{border:1px solid #ccc;padding:8px;text-align:right;}</style></head><body>
+    <h2>صيدليتي – تقرير مبيعات اليوم (${today})</h2>
+    <p>إجمالي المبيعات: ${daily.reduce((s,t)=>s+t.totalAmount,0)} د.ع</p>
+    <p>إجمالي الأرباح: ${daily.reduce((s,t)=>s+t.profitAmount,0)} د.ع</p>
+    <table><tr><th>الوقت</th><th>البيان</th><th>المبلغ</th><th>الربح</th></tr>`;
+    daily.forEach(t => html += `<tr><td>${t.time}</td><td>${t.desc}</td><td>${t.totalAmount}</td><td>${t.profitAmount}</td></tr>`);
+    html += `</table></body></html>`;
+    const win = window.open('', '_blank');
+    win.document.write(html); win.document.close(); win.print();
+}
+function printMonthlyReport() {
+    const now = new Date();
+    const month = now.getMonth(), year = now.getFullYear();
+    const monthly = dailySalesData.filter(t => {
+        const d = new Date(t.date);
+        return d.getMonth() === month && d.getFullYear() === year;
+    });
+    let html = `<html dir="rtl"><head><meta charset="UTF-8"><title>تقرير الشهر</title>
+    <style>body{font-family:Tahoma;padding:20px;background:#fff;color:#000;}table{width:100%;border-collapse:collapse;}th,td{border:1px solid #ccc;padding:8px;text-align:right;}</style></head><body>
+    <h2>صيدليتي – تقرير مبيعات الشهر (${now.toLocaleDateString('ar',{month:'long',year:'numeric'})})</h2>
+    <p>إجمالي المبيعات: ${monthly.reduce((s,t)=>s+t.totalAmount,0)} د.ع</p>
+    <p>إجمالي الأرباح: ${monthly.reduce((s,t)=>s+t.profitAmount,0)} د.ع</p>
+    <table><tr><th>التاريخ</th><th>البيان</th><th>المبلغ</th><th>الربح</th></tr>`;
+    monthly.forEach(t => html += `<tr><td>${t.date}</td><td>${t.desc}</td><td>${t.totalAmount}</td><td>${t.profitAmount}</td></tr>`);
+    html += `</table></body></html>`;
+    const win = window.open('', '_blank');
+    win.document.write(html); win.document.close(); win.print();
+}
+function exportFullBackup() {
+    const backup = { inventoryData, customers, debtsData, dailySalesData, withdrawalsData, exportedAt: new Date().toISOString() };
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `صيدليتي_نسخة_احتياطية_${new Date().toISOString().slice(0,10)}.json`;
+    link.click();
+    alert('✅ تم تنزيل النسخة الاحتياطية.');
+}
+function importFullBackup(file) {
+    if (!file) return;
+    if (!confirm('⚠️ استعادة النسخة الاحتياطية ستستبدل كل البيانات الحالية. هل تريد المتابعة؟')) {
+        document.getElementById('restoreFileInput').value = '';
+        return;
+    }
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const data = JSON.parse(e.target.result);
+            inventoryData = data.inventoryData || [];
+            customers = data.customers || [];
+            debtsData = data.debtsData || [];
+            dailySalesData = data.dailySalesData || [];
+            withdrawalsData = data.withdrawalsData || [];
+            saveData();
+            alert('✅ تمت استعادة النسخة الاحتياطية بنجاح.');
+            location.reload();
+        } catch (err) {
+            alert('❌ ملف النسخة الاحتياطية غير صالح.');
+        }
+    };
+    reader.readAsText(file);
+}
+
+// =========================== الإعدادات ===========================
+function clearAllData() {
+    if (confirm('⚠️ حذف كل بيانات الصيدلية نهائياً؟')) {
+        if (confirm('تأكيد نهائي: لا يمكن التراجع عن هذا الإجراء.')) {
+            const pin = localStorage.getItem('sy_pin');
+            localStorage.clear();
+            if (pin) localStorage.setItem('sy_pin', pin);
+            location.reload();
+        }
+    }
+}
+
+// =========================== التنبيهات ===========================
+function getAlerts() {
+    const today = getTodayISO();
+    const dueDebts = debtsData.filter(d => d.remaining > 0 && d.dueDate && d.dueDate === today);
+    const expiringSoon = inventoryData.filter(p => p.qty > 0 && p.expiry && daysUntil(p.expiry) >= 0 && daysUntil(p.expiry) <= 14);
+    const expired = inventoryData.filter(p => p.qty > 0 && expiryStatus(p) === 'expired');
+    return { dueDebts, expiringSoon, expired };
+}
+function renderNotifications(showAlert) {
+    const badge = document.getElementById('notifBadge');
+    const bell = document.getElementById('notifBell');
+    const list = document.getElementById('notifList');
+    if (!badge || !list || !bell) return;
+
+    const { dueDebts, expiringSoon, expired } = getAlerts();
+    const total = dueDebts.length + expiringSoon.length + expired.length;
+
+    if (total > 0) {
+        badge.style.display = 'inline-block';
+        badge.textContent = total;
+        bell.classList.add('has-alerts');
+    } else {
+        badge.style.display = 'none';
+        bell.classList.remove('has-alerts');
+    }
+
+    let html = '';
+    expired.forEach(p => {
+        html += `<div class="notif-item expired" onclick="document.querySelector('[data-tab=inventory]').click(); toggleNotifPanel(true);">
+            <div class="n-title">⛔ دواء منتهي الصلاحية — ${p.name}</div>
+            <div class="n-sub">انتهت الصلاحية بتاريخ ${p.expiry}</div>
+        </div>`;
+    });
+    expiringSoon.forEach(p => {
+        html += `<div class="notif-item near" onclick="document.querySelector('[data-tab=inventory]').click(); toggleNotifPanel(true);">
+            <div class="n-title">⏳ قارب على الانتهاء — ${p.name}</div>
+            <div class="n-sub">تنتهي الصلاحية بتاريخ ${p.expiry}</div>
+        </div>`;
+    });
+    dueDebts.forEach(d => {
+        html += `<div class="notif-item debt" onclick="document.querySelector('[data-tab=debts]').click(); toggleNotifPanel(true);">
+            <div class="n-title">💰 دين مستحق التسديد اليوم — ${d.customer}</div>
+            <div class="n-sub">${d.desc || ''} • المتبقي: ${d.remaining.toLocaleString()} د.ع</div>
+        </div>`;
+    });
+    list.innerHTML = html || '<div class="notif-empty">لا توجد تنبيهات حالياً 👍</div>';
+
+    if (showAlert && total > 0) {
+        const today = getTodayISO();
+        if (localStorage.getItem('sy_lastNotifAlertDate') !== today) {
+            let msg = `🔔 لديك ${total} تنبيه:\n\n`;
+            expired.forEach(p => msg += `⛔ منتهي الصلاحية: ${p.name}\n`);
+            expiringSoon.forEach(p => msg += `⏳ قارب على الانتهاء: ${p.name} (${p.expiry})\n`);
+            dueDebts.forEach(d => msg += `💰 دين: ${d.customer} — المتبقي ${d.remaining.toLocaleString()} د.ع\n`);
+            alert(msg);
+            localStorage.setItem('sy_lastNotifAlertDate', today);
+        }
+    }
+}
+function toggleNotifPanel(forceClose) {
+    const panel = document.getElementById('notifPanel');
+    if (!panel) return;
+    panel.style.display = forceClose ? 'none' : (panel.style.display === 'block' ? 'none' : 'block');
+}
+document.addEventListener('click', function(e) {
+    const bell = document.getElementById('notifBell');
+    const panel = document.getElementById('notifPanel');
+    if (bell && panel && panel.style.display === 'block' && !bell.contains(e.target)) {
+        panel.style.display = 'none';
+    }
+});
+</script>
+</body>
+</html>
