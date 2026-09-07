@@ -23,6 +23,9 @@
     .lock-card .btn { width: 100%; padding: 12px; font-size: 15px; }
     .lock-error { color: var(--danger); font-size: 13px; min-height: 18px; margin-bottom: 8px; }
     .lock-hint { color: var(--text-muted); font-size: 12px; margin-top: 14px; }
+    .lock-divider { display: flex; align-items: center; gap: 10px; margin: 14px 0 10px; }
+    .lock-divider .line { flex: 1; height: 1px; background: #e2e8f0; }
+    .lock-divider span { color: var(--text-muted); font-size: 12px; }
 
     .app { display: none; flex-direction: row; height: 100vh; overflow: hidden; }
     .app.active { display: flex; }
@@ -137,6 +140,13 @@
         <input type="password" id="lockInputConfirm" placeholder="تأكيد كلمة المرور" class="hidden" maxlength="12">
         <div class="lock-error" id="lockError"></div>
         <button class="btn btn-primary" id="lockBtn" style="width:100%;justify-content:center;">دخول</button>
+        <div id="lockBarcodeSection" class="hidden">
+            <div class="lock-divider"><div class="line"></div><span>أو</span><div class="line"></div></div>
+            <div class="barcode-input-row">
+                <input type="text" id="lockBarcodeInput" placeholder="امسح باركود الدخول" onkeydown="handleLockBarcodeKey(event)">
+                <button type="button" class="icon-btn" onclick="openBarcodeScanner('lockBarcodeInput')" title="مسح بالكاميرا">📷</button>
+            </div>
+        </div>
         <div class="lock-hint">هذا التطبيق يعمل بالكامل بدون إنترنت، وبياناته محفوظة على هذا الجهاز فقط.</div>
     </div>
 </div>
@@ -409,6 +419,18 @@
                 <button class="btn btn-primary" onclick="changePin()">💾 تحديث كلمة المرور</button>
             </div>
             <div class="card">
+                <div class="card-header"><h3>📷 باركود تسجيل الدخول (اختياري)</h3></div>
+                <p style="color:var(--text-muted);font-size:13px;margin-bottom:14px;">اطبع أي باركود (أو استخدم بطاقة موظف) وامسحه هنا. بعدها تكدر تدخل للتطبيق من شاشة القفل بمسح نفس الباركود بدل كتابة كلمة المرور.</p>
+                <div class="barcode-input-row" style="max-width:420px;">
+                    <input type="text" id="loginBarcodeInput" placeholder="امسح أو أدخل الكود">
+                    <button type="button" class="icon-btn" onclick="openBarcodeScanner('loginBarcodeInput')" title="مسح بالكاميرا">📷</button>
+                </div>
+                <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;">
+                    <button class="btn btn-primary" onclick="saveLoginBarcode()">💾 حفظ باركود الدخول</button>
+                    <button class="btn btn-danger" onclick="removeLoginBarcode()">🗑️ إلغاء باركود الدخول</button>
+                </div>
+            </div>
+            <div class="card">
                 <div class="card-header"><h3>🗄️ سجل المبيعات حسب اليوم</h3></div>
                 <div class="table-wrap"><table><thead><tr><th>التاريخ</th><th>عدد العمليات</th><th>إجمالي المبيعات</th><th>إجمالي الربح</th></tr></thead><tbody id="dailyArchiveTableBody"></tbody></table></div>
             </div>
@@ -484,7 +506,31 @@ function renderLockScreen() {
         lockBtn.textContent = 'دخول';
     }
     lockInput.value = ''; lockInputConfirm.value = ''; lockError.textContent = '';
+    const barcodeSection = document.getElementById('lockBarcodeSection');
+    const lockBarcodeInput = document.getElementById('lockBarcodeInput');
+    if (!isFirstRun() && localStorage.getItem('mb_loginBarcode')) {
+        barcodeSection.classList.remove('hidden');
+    } else {
+        barcodeSection.classList.add('hidden');
+    }
+    if (lockBarcodeInput) lockBarcodeInput.value = '';
     lockInput.focus();
+}
+function handleLockBarcodeKey(e) {
+    if (e.key === 'Enter') { e.preventDefault(); checkLoginBarcode(); }
+}
+function checkLoginBarcode() {
+    const el = document.getElementById('lockBarcodeInput');
+    const val = el.value.trim();
+    if (!val) return;
+    const stored = localStorage.getItem('mb_loginBarcode');
+    if (stored && val === stored) {
+        unlockApp();
+    } else {
+        lockError.textContent = 'باركود الدخول غير صحيح.';
+        el.value = '';
+        el.focus();
+    }
 }
 lockBtn.addEventListener('click', function() {
     if (isFirstRun()) {
@@ -515,6 +561,17 @@ function changePin() {
     document.getElementById('newPin').value = ''; document.getElementById('newPinConfirm').value = '';
     alert('✅ تم تحديث كلمة المرور.');
 }
+function saveLoginBarcode() {
+    const val = document.getElementById('loginBarcodeInput').value.trim();
+    if (!val) return alert('أدخل أو امسح باركود أولاً.');
+    localStorage.setItem('mb_loginBarcode', val);
+    alert('✅ تم حفظ باركود الدخول. تكدر تستخدمه بشاشة القفل بدل كلمة المرور.');
+}
+function removeLoginBarcode() {
+    localStorage.removeItem('mb_loginBarcode');
+    document.getElementById('loginBarcodeInput').value = '';
+    alert('تم إلغاء باركود الدخول.');
+}
 if (sessionStorage.getItem('mb_unlocked') === '1' && !isFirstRun()) unlockApp();
 else renderLockScreen();
 
@@ -535,7 +592,7 @@ document.querySelectorAll('#mainMenu li').forEach(item => {
         if (tab === 'accessories') renderAccessories();
         if (tab === 'installments') { renderInstallments(); renderCompletedInstallments(); }
         if (tab === 'debts') renderDebts();
-        if (tab === 'settings') renderDailyArchive();
+        if (tab === 'settings') { renderDailyArchive(); document.getElementById('loginBarcodeInput').value = localStorage.getItem('mb_loginBarcode') || ''; }
     });
 });
 
@@ -650,7 +707,8 @@ async function openBarcodeScanner(targetInputId) {
                     const inputEl = document.getElementById(barcodeScanTarget);
                     inputEl.value = val;
                     closeBarcodeScanner();
-                    if (barcodeScanTarget === 'invBarcode') return;
+                    if (barcodeScanTarget === 'invBarcode' || barcodeScanTarget === 'loginBarcodeInput') return;
+                    if (barcodeScanTarget === 'lockBarcodeInput') { checkLoginBarcode(); return; }
                     tryBarcodeAutoAdd(barcodeScanTarget);
                     if (barcodeScanTarget === 'invSearch') renderInventory();
                 } else {
