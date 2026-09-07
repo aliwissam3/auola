@@ -105,6 +105,12 @@
     .form-group input:focus, .form-group select:focus { border-color: var(--primary-light); background: #fff; }
     .form-group.checkbox-row { flex-direction: row; align-items: center; gap: 8px; padding-top: 22px; }
     .form-group.checkbox-row input { width: 18px; height: 18px; }
+    .barcode-input-row { display: flex; gap: 6px; min-width: 0; }
+    .barcode-input-row input { flex: 1; min-width: 0; }
+    .icon-btn { border: 2px solid #dce4ec; background: #fafcff; border-radius: 10px; padding: 0 10px; cursor: pointer; font-size: 16px; flex-shrink: 0; }
+    .icon-btn:hover { background: #eef4ff; }
+    .form-grid .wide-field { grid-column: span 2; }
+    @media (max-width: 500px) { .form-grid .wide-field { grid-column: span 1; } }
 
     .btn { padding: 8px 20px; border: none; border-radius: 12px; font-weight: 600; font-size: 14px; cursor: pointer; transition: 0.15s; display: inline-flex; align-items: center; gap: 6px; }
     .btn-primary { background: var(--primary-light); color: #fff; }
@@ -118,9 +124,17 @@
     .btn-dark { background: #333; color: #fff; }
     .btn-sm { padding: 4px 12px; font-size: 12px; border-radius: 8px; }
 
-    .search-bar { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+    .search-bar { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
     .search-bar input, .search-bar select { flex: 1; min-width: 160px; padding: 12px 18px; border: 2px solid #dce4ec; border-radius: 30px; font-size: 14px; background: #fafcff; outline: none; }
     .search-bar input:focus, .search-bar select:focus { border-color: var(--primary-light); }
+    .scan-btn { background: var(--primary-light); color: #fff; border: none; width: 44px; height: 44px; border-radius: 50%; cursor: pointer; font-size: 18px; flex-shrink: 0; }
+    .scan-btn:hover { background: var(--primary); }
+    .barcode-text { font-family: 'Courier New', monospace; font-size: 12px; background: #eef4ff; padding: 2px 8px; border-radius: 6px; }
+
+    #barcodeModal { position: fixed; inset: 0; z-index: 1500; background: rgba(0,0,0,0.78); display: flex; align-items: center; justify-content: center; }
+    #barcodeModal .modal-box { background: #fff; border-radius: 18px; padding: 20px; max-width: 420px; width: 92%; text-align: center; }
+    #barcodeVideo { width: 100%; border-radius: 12px; background: #000; max-height: 320px; }
+    .scan-hint { color: var(--text-muted); font-size: 12px; margin: 10px 0; }
 
     .hidden { display: none !important; }
     .chart-container { max-width: 100%; height: 220px; margin: 12px 0; }
@@ -161,6 +175,16 @@
 </style>
 </head>
 <body>
+
+<!-- ===================== نافذة مسح الباركود ===================== -->
+<div id="barcodeModal" class="hidden">
+    <div class="modal-box">
+        <h3 style="margin-bottom:10px;">📷 امسح الباركود</h3>
+        <video id="barcodeVideo" playsinline muted autoplay></video>
+        <div class="scan-hint">وجّه الكاميرا نحو الباركود. إذا عندك قارئ باركود خارجي (USB)، اضغط داخل مربع البحث وامسح مباشرة بدون الحاجة لهذه النافذة.</div>
+        <button class="btn btn-danger" style="width:100%;" onclick="closeBarcodeScanner()">إغلاق</button>
+    </div>
+</div>
 
 <!-- ===================== شاشة القفل ===================== -->
 <div id="lockScreen">
@@ -243,7 +267,8 @@
             <div class="card">
                 <div class="card-header"><h3>🛒 بيع سريع</h3></div>
                 <div class="search-bar">
-                    <input type="text" id="posSearch" placeholder="ابحث عن دواء بالاسم..." oninput="renderPOS()">
+                    <input type="text" id="posSearch" placeholder="ابحث بالاسم أو امسح الباركود..." oninput="renderPOS()" onkeydown="handleScanKey(event,'posSearch')">
+                    <button class="scan-btn" onclick="openBarcodeScanner('posSearch')" title="مسح بالكاميرا">📷</button>
                 </div>
                 <div class="table-wrap">
                     <table>
@@ -322,6 +347,14 @@
                     <div class="form-group"><label>الكمية</label><input type="text" id="invQty" class="qty" onkeydown="handleWordNumberKey(event,this)" onblur="parseWordNumber(this)"></div>
                     <div class="form-group"><label>رقم الدفعة (اختياري)</label><input type="text" id="invBatch" placeholder="اختياري"></div>
                     <div class="form-group"><label>تاريخ الصلاحية</label><input type="date" id="invExpiry"></div>
+                    <div class="form-group wide-field">
+                        <label>الباركود</label>
+                        <div class="barcode-input-row">
+                            <input type="text" id="invBarcode" placeholder="امسح أو أدخل الكود">
+                            <button type="button" class="icon-btn" onclick="openBarcodeScanner('invBarcode')" title="مسح بالكاميرا">📷</button>
+                            <button type="button" class="icon-btn" onclick="generateBarcode()" title="توليد باركود">🔀</button>
+                        </div>
+                    </div>
                     <div class="form-group checkbox-row"><input type="checkbox" id="invRx"><label style="padding:0;">يتطلب وصفة طبية</label></div>
                     <div class="form-group"><label>ملاحظة</label><input type="text" id="invNote" placeholder="ملاحظة"></div>
                 </div>
@@ -330,7 +363,8 @@
             <div class="card">
                 <div class="card-header"><h3>📦 المخزون الحالي</h3><button class="btn btn-warning btn-sm" onclick="exportInventoryCSV()">📤 تصدير CSV</button></div>
                 <div class="search-bar">
-                    <input type="text" id="invSearch" placeholder="بحث بالاسم..." oninput="renderInventory()">
+                    <input type="text" id="invSearch" placeholder="بحث بالاسم أو الباركود..." oninput="renderInventory()">
+                    <button class="scan-btn" onclick="openBarcodeScanner('invSearch')" title="مسح بالكاميرا">📷</button>
                     <select id="invFilter" onchange="renderInventory()">
                         <option value="all">كل الأدوية</option>
                         <option value="low">نواقص المخزون فقط</option>
@@ -340,7 +374,7 @@
                 </div>
                 <div class="table-wrap">
                     <table>
-                        <thead><tr><th>الاسم</th><th>التصنيف</th><th>الوحدة</th><th>شراء</th><th>بيع</th><th>الكمية</th><th>الصلاحية</th><th>وصفة</th><th>إجراء</th></tr></thead>
+                        <thead><tr><th>الاسم</th><th>التصنيف</th><th>الوحدة</th><th>شراء</th><th>بيع</th><th>الكمية</th><th>الصلاحية</th><th>وصفة</th><th>الباركود</th><th>إجراء</th></tr></thead>
                         <tbody id="inventoryTable"></tbody>
                     </table>
                 </div>
@@ -639,6 +673,67 @@ function handleWordNumberKey(e, el) {
     if (e.key === 'Enter') { e.preventDefault(); parseWordNumber(el); el.blur(); }
 }
 
+// =========================== الباركود ===========================
+function generateBarcode() {
+    const code = '2' + Date.now().toString().slice(-11);
+    document.getElementById('invBarcode').value = code;
+}
+function handleScanKey(e, searchInputId) {
+    if (e.key === 'Enter') { e.preventDefault(); tryBarcodeAutoAdd(searchInputId); }
+}
+function tryBarcodeAutoAdd(searchInputId) {
+    const el = document.getElementById(searchInputId);
+    const val = el.value.trim();
+    if (!val) return;
+    const prod = inventoryData.find(p => p.barcode && p.barcode === val);
+    if (!prod) return;
+    if (searchInputId === 'posSearch') { renderPOS(); addToCart(prod.id); el.value = ''; renderPOS(); }
+    if (searchInputId === 'invSearch') { el.value = ''; document.getElementById('invSearch').value = prod.name; renderInventory(); }
+}
+
+let barcodeStream = null;
+let barcodeScanTarget = null;
+let barcodeRAF = null;
+function isBarcodeCameraSupported() { return 'BarcodeDetector' in window && !!navigator.mediaDevices; }
+async function openBarcodeScanner(targetInputId) {
+    if (!isBarcodeCameraSupported()) {
+        alert('📷 متصفحك لا يدعم المسح بالكاميرا مباشرة.\nاستخدم قارئ باركود خارجي (USB) وامسح مباشرة داخل مربع البحث، أو أدخل الكود يدوياً.');
+        return;
+    }
+    barcodeScanTarget = targetInputId;
+    document.getElementById('barcodeModal').classList.remove('hidden');
+    try {
+        barcodeStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        const video = document.getElementById('barcodeVideo');
+        video.srcObject = barcodeStream;
+        await video.play();
+        const detector = new BarcodeDetector({ formats: ['ean_13','ean_8','code_128','upc_a','upc_e','code_39','qr_code'] });
+        const loop = () => {
+            if (!barcodeStream) return;
+            detector.detect(video).then(codes => {
+                if (codes.length > 0) {
+                    const val = codes[0].rawValue;
+                    document.getElementById(barcodeScanTarget).value = val;
+                    closeBarcodeScanner();
+                    if (barcodeScanTarget === 'invBarcode') return;
+                    tryBarcodeAutoAdd(barcodeScanTarget);
+                } else {
+                    barcodeRAF = requestAnimationFrame(loop);
+                }
+            }).catch(() => { barcodeRAF = requestAnimationFrame(loop); });
+        };
+        loop();
+    } catch (err) {
+        alert('تعذر الوصول إلى الكاميرا: ' + err.message + '\nيمكنك استخدام قارئ باركود خارجي (USB) بدلاً من ذلك.');
+        closeBarcodeScanner();
+    }
+}
+function closeBarcodeScanner() {
+    document.getElementById('barcodeModal').classList.add('hidden');
+    if (barcodeRAF) cancelAnimationFrame(barcodeRAF);
+    if (barcodeStream) { barcodeStream.getTracks().forEach(t => t.stop()); barcodeStream = null; }
+}
+
 // =========================== أدوات الصلاحية ===========================
 function daysUntil(dateStr) {
     if (!dateStr) return null;
@@ -769,14 +864,18 @@ function addInventoryItem() {
     const batch = document.getElementById('invBatch').value.trim();
     const expiry = document.getElementById('invExpiry').value;
     const rx = document.getElementById('invRx').checked;
+    const barcode = document.getElementById('invBarcode').value.trim();
     const note = document.getElementById('invNote').value.trim();
     if (!name || isNaN(buy) || isNaN(sell) || isNaN(qty)) {
         alert('يرجى ملء اسم الدواء وسعر الشراء وسعر البيع والكمية بشكل صحيح.');
         return;
     }
-    inventoryData.push({ id: Date.now(), name, generic, cat, manufacturer, unit, buy, sell, qty, batch, expiry, rx, note });
+    if (barcode && inventoryData.some(i => i.barcode && i.barcode === barcode)) {
+        if (!confirm(`تنبيه: الباركود (${barcode}) موجود مسبقاً. هل تريد المتابعة؟`)) return;
+    }
+    inventoryData.push({ id: Date.now(), name, generic, cat, manufacturer, unit, buy, sell, qty, batch, expiry, rx, barcode, note });
     saveData();
-    ['invName','invGeneric','invManufacturer','invBuy','invSell','invQty','invBatch','invExpiry','invNote'].forEach(id => document.getElementById(id).value = '');
+    ['invName','invGeneric','invManufacturer','invBuy','invSell','invQty','invBatch','invExpiry','invBarcode','invNote'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('invRx').checked = false;
     renderInventory();
     updateDashboard();
@@ -785,7 +884,7 @@ function addInventoryItem() {
 function renderInventory() {
     const q = document.getElementById('invSearch').value.toLowerCase();
     const filter = document.getElementById('invFilter').value;
-    let filtered = inventoryData.filter(p => p.name.toLowerCase().includes(q) || (p.generic && p.generic.toLowerCase().includes(q)));
+    let filtered = inventoryData.filter(p => p.name.toLowerCase().includes(q) || (p.generic && p.generic.toLowerCase().includes(q)) || (p.barcode && p.barcode.includes(q)));
     if (filter === 'low') filtered = filtered.filter(p => p.qty <= LOW_STOCK_QTY);
     if (filter === 'near') filtered = filtered.filter(p => expiryStatus(p) === 'near');
     if (filter === 'expired') filtered = filtered.filter(p => expiryStatus(p) === 'expired');
@@ -802,9 +901,10 @@ function renderInventory() {
             <td style="color:${p.qty<=LOW_STOCK_QTY?'#d32f2f':'#1a2332'}">${p.qty}</td>
             <td>${expiryLabel(p)}</td>
             <td>${p.rx ? '<span class="rx-badge">Rx</span>' : '-'}</td>
+            <td>${p.barcode ? `<span class="barcode-text">${p.barcode}</span>` : '-'}</td>
             <td><button class="btn btn-danger btn-sm" onclick="deleteInventoryItem(${p.id})">حذف</button></td>
         </tr>`;
-    }).join('') || '<tr><td colspan="9" style="text-align:center;color:#999;">لا توجد أدوية</td></tr>';
+    }).join('') || '<tr><td colspan="10" style="text-align:center;color:#999;">لا توجد أدوية</td></tr>';
 }
 function deleteInventoryItem(id) {
     if (confirm('حذف الدواء نهائياً؟')) {
@@ -815,8 +915,8 @@ function deleteInventoryItem(id) {
     }
 }
 function exportInventoryCSV() {
-    let csv = 'الاسم,المادة الفعالة,التصنيف,الشركة المصنعة,الوحدة,سعر الشراء,سعر البيع,الكمية,رقم الدفعة,تاريخ الصلاحية,وصفة طبية\n';
-    inventoryData.forEach(p => csv += `${p.name},${p.generic||''},${p.cat},${p.manufacturer||''},${p.unit},${p.buy},${p.sell},${p.qty},${p.batch||''},${p.expiry||''},${p.rx?'نعم':'لا'}\n`);
+    let csv = 'الاسم,المادة الفعالة,التصنيف,الشركة المصنعة,الوحدة,سعر الشراء,سعر البيع,الكمية,رقم الدفعة,تاريخ الصلاحية,وصفة طبية,الباركود\n';
+    inventoryData.forEach(p => csv += `${p.name},${p.generic||''},${p.cat},${p.manufacturer||''},${p.unit},${p.buy},${p.sell},${p.qty},${p.batch||''},${p.expiry||''},${p.rx?'نعم':'لا'},${p.barcode||''}\n`);
     const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
@@ -868,7 +968,7 @@ function deleteCustomer(id) {
 // =========================== نقطة البيع ===========================
 function renderPOS() {
     const q = document.getElementById('posSearch').value.toLowerCase();
-    const filtered = inventoryData.filter(p => p.qty > 0 && p.name.toLowerCase().includes(q));
+    const filtered = inventoryData.filter(p => p.qty > 0 && (p.name.toLowerCase().includes(q) || (p.barcode && p.barcode.includes(q))));
     const tbody = document.getElementById('posProducts');
     tbody.innerHTML = filtered.map(p =>
         `<tr><td>${p.name}${p.rx ? ' <span class="rx-badge">Rx</span>' : ''}</td><td>${p.cat}</td><td>${p.sell.toLocaleString()}</td><td>${p.qty}</td><td>${expiryLabel(p)}</td>
