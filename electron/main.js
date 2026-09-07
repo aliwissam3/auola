@@ -12,14 +12,22 @@ function getServerModulePath() {
         : path.join(__dirname, '..', 'server', 'server.js');
 }
 
-function getLanUrl() {
+function rankLanAddress(address) {
+    if (address.startsWith('169.254.')) return -1;
+    if (address.startsWith('192.168.')) return 3;
+    if (address.startsWith('10.')) return 2;
+    return 1;
+}
+function getLanUrls() {
     const interfaces = os.networkInterfaces();
+    const addresses = [];
     for (const name of Object.keys(interfaces)) {
         for (const iface of interfaces[name] || []) {
-            if (iface.family === 'IPv4' && !iface.internal) return `http://${iface.address}:${PORT}`;
+            if (iface.family === 'IPv4' && !iface.internal) addresses.push(iface.address);
         }
     }
-    return `http://localhost:${PORT}`;
+    const sorted = addresses.filter(a => rankLanAddress(a) >= 0).sort((a, b) => rankLanAddress(b) - rankLanAddress(a));
+    return sorted.length ? sorted.map(a => `http://${a}:${PORT}`) : [`http://localhost:${PORT}`];
 }
 
 function startServer() {
@@ -53,11 +61,12 @@ function createWindow() {
                 {
                     label: 'عنوان الشبكة (للأجهزة الأخرى)',
                     click: () => {
+                        const urls = getLanUrls();
                         dialog.showMessageBox(mainWindow, {
                             type: 'info',
                             title: 'عنوان سيرفر المحل',
                             message: 'استخدم هذا العنوان لفتح النظام من أجهزة أخرى على نفس الشبكة (أندرويد / آيفون):',
-                            detail: getLanUrl()
+                            detail: urls.join('\n') + '\n\nإذا لم يعمل الأول، جرّب العناوين الأخرى. تأكد أن جدار حماية ويندوز يسمح لهذا التطبيق بالوصول على الشبكات الخاصة (Private networks).'
                         });
                     }
                 },

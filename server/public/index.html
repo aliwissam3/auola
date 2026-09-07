@@ -345,8 +345,10 @@
             <div class="qr-panel hidden" id="qrPanel">
                 <div class="qr-box"><canvas id="qrCanvas"></canvas><div id="qrFallback" class="hidden" style="padding:30px;color:#333;font-size:13px;">تعذر توليد الرمز، استخدم الرابط أدناه</div></div>
                 <div class="qr-url" id="qrUrlText"></div>
+                <div class="qr-note hidden" id="qrAltAddresses"></div>
                 <button type="button" class="btn btn-sm btn-ghost" style="margin-top:10px;" id="copyLinkBtn">📋 نسخ الرابط</button>
                 <div class="qr-note">📶 امسح الرمز بكاميرا الآيفون لفتح النظام مباشرة على الهاتف. يجب أن يكون الحاسوب والهاتف على نفس شبكة الواي فاي.</div>
+                <div class="qr-warn">⚠️ إذا ظهرت رسالة "تعذر الاتصال بالسيرفر" بالهاتف: تأكد أن الهاتف والحاسوب على نفس الواي فاي بالضبط، وتأكد أن "جدار حماية ويندوز" سمح للتطبيق بالوصول (يظهر تنبيه لهذا أول مرة تشغّل التطبيق — اضغط "Allow access"). إذا استمرت المشكلة جرب أحد العناوين البديلة أعلاه.</div>
             </div>
         </div>
     </div>
@@ -865,20 +867,30 @@
         }
         async function computeShareUrl() {
             const localHosts = ['localhost', '127.0.0.1', '0.0.0.0', '::1'];
-            if (!localHosts.includes(location.hostname)) return location.origin;
+            if (!localHosts.includes(location.hostname)) return { url: location.origin, alternates: [] };
             try {
                 const res = await fetch(getServerBase() + '/api/network-info');
                 if (res.ok) {
                     const info = await res.json();
-                    if (info.addresses && info.addresses.length) return `http://${info.addresses[0]}:${info.port}`;
+                    if (info.addresses && info.addresses.length) {
+                        const urls = info.addresses.map(a => `http://${a}:${info.port}`);
+                        return { url: urls[0], alternates: urls.slice(1) };
+                    }
                 }
             } catch (e) {}
-            return location.origin;
+            return { url: location.origin, alternates: [] };
         }
         async function renderLoginQR() {
             const canvas = document.getElementById('qrCanvas');
-            const url = await computeShareUrl();
+            const { url, alternates } = await computeShareUrl();
             document.getElementById('qrUrlText').textContent = url;
+            const altBox = document.getElementById('qrAltAddresses');
+            if (alternates.length) {
+                altBox.textContent = 'إذا لم يعمل، جرّب أحد هذه العناوين بدلاً منه: ' + alternates.join(' — ');
+                altBox.classList.remove('hidden');
+            } else {
+                altBox.classList.add('hidden');
+            }
             if (typeof QRCode === 'undefined') {
                 document.getElementById('qrFallback').classList.remove('hidden');
                 canvas.classList.add('hidden');

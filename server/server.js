@@ -6,6 +6,15 @@ const cors = require('cors');
 const { Server: SocketIOServer } = require('socket.io');
 const store = require('./data-store');
 
+function rankLanAddress(address) {
+    // نفضّل عناوين الشبكة المنزلية/المحلية المعتادة (192.168.x أو 10.x) على عناوين
+    // برامج VPN أو الأجهزة الافتراضية (VMware/Hyper-V/Docker) التي غالباً تبدأ بأرقام أخرى،
+    // ونستبعد عناوين APIPA (169.254.x) التي تعني عدم اتصال حقيقي بالشبكة.
+    if (address.startsWith('169.254.')) return -1;
+    if (address.startsWith('192.168.')) return 3;
+    if (address.startsWith('10.')) return 2;
+    return 1;
+}
 function getLanAddresses() {
     const interfaces = os.networkInterfaces();
     const addresses = [];
@@ -14,7 +23,9 @@ function getLanAddresses() {
             if (iface.family === 'IPv4' && !iface.internal) addresses.push(iface.address);
         }
     }
-    return addresses;
+    return addresses
+        .filter(a => rankLanAddress(a) >= 0)
+        .sort((a, b) => rankLanAddress(b) - rankLanAddress(a));
 }
 
 function createServer() {
