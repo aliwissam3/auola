@@ -1,0 +1,81 @@
+name: Build AUOLA Apps (Windows + Android)
+
+on:
+  push:
+    branches: [ main, 'claude/**' ]
+    paths:
+      - 'server/**'
+      - 'electron/**'
+      - 'mobile/**'
+      - '.github/workflows/build-apps.yml'
+  workflow_dispatch: {}
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install server dependencies
+        working-directory: server
+        run: npm install --no-audit --no-fund
+
+      - name: Install electron dependencies
+        working-directory: electron
+        run: npm install --no-audit --no-fund
+
+      - name: Build Windows portable app
+        working-directory: electron
+        run: npx electron-builder --win portable --x64
+
+      - name: Upload Windows build
+        uses: actions/upload-artifact@v4
+        with:
+          name: AUOLA-Windows
+          path: electron/dist/*.exe
+
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Install server dependencies (client lives in server/public)
+        working-directory: server
+        run: npm install --no-audit --no-fund
+
+      - name: Install mobile (Capacitor) dependencies
+        working-directory: mobile
+        run: npm install --no-audit --no-fund
+
+      - name: Sync latest web client into the Android project
+        working-directory: mobile
+        run: |
+          rm -rf www
+          mkdir -p www
+          cp -r ../server/public/* www/
+          npx cap sync android
+
+      - name: Build debug APK
+        working-directory: mobile/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Upload Android build
+        uses: actions/upload-artifact@v4
+        with:
+          name: AUOLA-Android
+          path: mobile/android/app/build/outputs/apk/debug/*.apk

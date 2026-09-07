@@ -1,0 +1,36 @@
+{
+  "name": "auola-desktop",
+  "version": "1.0.0",
+  "description": "AUOLA - نظام إدارة المبيعات (تطبيق سطح المكتب لوندوز)",
+  "main": "main.js",
+  "author": "AUOLA",
+  "scripts": {
+    "start": "electron .",
+    "dist:win": "electron-builder --win portable --x64"
+  },
+  "build": {
+    "appId": "com.auola.desktop",
+    "productName": "AUOLA",
+    "asar": true,
+    "files": [
+      "main.js"
+    ],
+    "extraResources": [
+      { "from": "../server/server.js", "to": "server/server.js" },
+      { "from": "../server/data-store.js", "to": "server/data-store.js" },
+      { "from": "../server/public", "to": "server/public" },
+      { "from": "../server/node_modules", "to": "server/node_modules" }
+    ],
+    "win": {
+      "target": ["portable"],
+      "artifactName": "AUOLA-Setup-${version}.${ext}"
+    },
+    "directories": {
+      "output": "dist"
+    }
+  },
+  "devDependencies": {
+    "electron": "^31.3.0",
+    "electron-builder": "^24.13.3"
+  }
+}

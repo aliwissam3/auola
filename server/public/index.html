@@ -9,8 +9,9 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="AUOLA">
-    <!-- QRCode generator (لتوليد رمز الدخول السريع للهاتف) -->
-    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+    <!-- مكتبات محلية (بدون إنترنت) لتعمل النسخة كاملة على الشبكة المحلية فقط -->
+    <script src="vendor/qrcode.min.js"></script>
+    <script src="vendor/socket.io.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -305,8 +306,24 @@
 </head>
 <body>
 
+    <!-- ===================== شاشة إعداد عنوان السيرفر (تطبيق أندرويد فقط) ===================== -->
+    <div class="login-screen hidden" id="serverSetupScreen">
+        <div class="login-card">
+            <div class="login-badge">A</div>
+            <h1>نظام <span>AUOLA</span></h1>
+            <p class="sub">أدخل عنوان سيرفر المحل على الشبكة</p>
+            <div class="login-fields">
+                <label for="serverSetupInput">عنوان السيرفر</label>
+                <input type="text" id="serverSetupInput" class="cart-price-input" style="width:100%;text-align:left;direction:ltr;padding:12px 16px;" placeholder="http://192.168.1.5:4000">
+                <div class="login-error" id="serverSetupError"></div>
+            </div>
+            <button type="button" class="btn btn-success btn-wide" style="margin-top:14px;" id="serverSetupBtn">➡️ متابعة</button>
+            <div class="qr-note">اسأل من يدير جهاز المحل (الوندوز) عن هذا العنوان — يظهر أعلى شاشة تسجيل الدخول هناك.</div>
+        </div>
+    </div>
+
     <!-- ===================== شاشة تسجيل الدخول ===================== -->
-    <div class="login-screen" id="loginScreen">
+    <div class="login-screen hidden" id="loginScreen">
         <div class="login-card">
             <div class="login-badge">A</div>
             <h1>نظام <span>AUOLA</span></h1>
@@ -330,7 +347,6 @@
                 <div class="qr-url" id="qrUrlText"></div>
                 <button type="button" class="btn btn-sm btn-ghost" style="margin-top:10px;" id="copyLinkBtn">📋 نسخ الرابط</button>
                 <div class="qr-note">📶 امسح الرمز بكاميرا الآيفون لفتح النظام مباشرة على الهاتف. يجب أن يكون الحاسوب والهاتف على نفس شبكة الواي فاي.</div>
-                <div class="qr-warn hidden" id="qrProtocolWarning">⚠️ الصفحة الحالية مفتوحة كملف محلي (file://) ولا يمكن الوصول إليها من هاتف آخر. لتفعيل هذه الميزة، شغّل الصفحة عبر خادم شبكة محلي على الحاسوب (مثال: Live Server) ثم افتح النظام من رابط الشبكة قبل توليد الرمز.</div>
             </div>
         </div>
     </div>
@@ -632,6 +648,13 @@
 
             <!-- ===================== الإعدادات ===================== -->
             <div id="section-settings" class="section hidden">
+                <div class="card hidden" id="serverAddressCard">
+                    <div class="card-header"><h3>🌐 عنوان سيرفر المحل</h3></div>
+                    <div class="form-grid">
+                        <div class="form-group"><label>عنوان السيرفر (IP:المنفذ)</label><input type="text" id="serverAddressInput" style="direction:ltr;text-align:left;" placeholder="http://192.168.1.5:4000"></div>
+                    </div>
+                    <button class="btn btn-primary" onclick="updateServerAddress()">💾 حفظ وإعادة الاتصال</button>
+                </div>
                 <div class="card">
                     <div class="card-header"><h3>🔑 بيانات الدخول للنظام</h3></div>
                     <div class="form-grid">
@@ -668,73 +691,169 @@
         //  جميع الحقوق محفوظة © 2026
         // ========================================================================
 
-        // =========================== المتغيرات العامة ===========================
-        let deviceSalesLog = JSON.parse(localStorage.getItem('deviceSalesLog')) || [];
-        let accessoryStock = JSON.parse(localStorage.getItem('accessoryStock')) || [];
-        let installmentsData = JSON.parse(localStorage.getItem('installmentsData')) || [];
-        let completedInstallmentsData = JSON.parse(localStorage.getItem('completedInstallmentsData')) || [];
-        let debtsData = JSON.parse(localStorage.getItem('debtsData')) || [];
-        let dailySalesData = JSON.parse(localStorage.getItem('dailySalesData')) || [];
-        let dailyArchiveData = JSON.parse(localStorage.getItem('dailyArchiveData')) || [];
-        let financeData = JSON.parse(localStorage.getItem('financeData')) || [];
+        // =========================== المتغيرات العامة (تُحدَّث من السيرفر) ===========================
+        let deviceSalesLog = [];
+        let accessoryStock = [];
+        let installmentsData = [];
+        let completedInstallmentsData = [];
+        let debtsData = [];
+        let dailySalesData = [];
+        let dailyArchiveData = [];
+        let financeData = [];
+        let socket = null;
 
-        function saveData() {
-            localStorage.setItem('deviceSalesLog', JSON.stringify(deviceSalesLog));
-            localStorage.setItem('accessoryStock', JSON.stringify(accessoryStock));
-            localStorage.setItem('installmentsData', JSON.stringify(installmentsData));
-            localStorage.setItem('completedInstallmentsData', JSON.stringify(completedInstallmentsData));
-            localStorage.setItem('debtsData', JSON.stringify(debtsData));
-            localStorage.setItem('dailySalesData', JSON.stringify(dailySalesData));
-            localStorage.setItem('dailyArchiveData', JSON.stringify(dailyArchiveData));
-            localStorage.setItem('financeData', JSON.stringify(financeData));
+        // =========================== الاتصال بالسيرفر ===========================
+        function isNativeApp() {
+            return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+        }
+        function getServerBase() {
+            if (isNativeApp()) return (localStorage.getItem('auola_server_url') || '').replace(/\/$/, '');
+            return location.origin;
+        }
+        async function apiFetch(path, options) {
+            options = options || {};
+            const headers = Object.assign({}, options.headers, { 'Authorization': 'Bearer ' + (localStorage.getItem('auola_token') || '') });
+            if (options.body && typeof options.body !== 'string') {
+                options.body = JSON.stringify(options.body);
+                headers['Content-Type'] = 'application/json';
+            }
+            let res;
+            try {
+                res = await fetch(getServerBase() + path, Object.assign({}, options, { headers }));
+            } catch (e) {
+                throw new Error('تعذر الاتصال بسيرفر المحل. تأكد أنك على نفس شبكة الواي فاي وأن السيرفر يعمل.');
+            }
+            if (res.status === 401) {
+                forceLogout();
+                throw new Error('unauthorized');
+            }
+            return res;
+        }
+        async function apiJson(path, options) {
+            const res = await apiFetch(path, options);
+            const body = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(body.error || 'حدث خطأ غير متوقع.');
+            return body;
+        }
+        function debounce(fn, ms) {
+            let t = null;
+            return function (...args) { clearTimeout(t); t = setTimeout(() => fn.apply(null, args), ms); };
+        }
+
+        async function refreshState() {
+            const s = await apiJson('/api/state');
+            deviceSalesLog = s.deviceSalesLog;
+            accessoryStock = s.accessoryStock;
+            installmentsData = s.installmentsData;
+            completedInstallmentsData = s.completedInstallmentsData;
+            debtsData = s.debtsData;
+            dailySalesData = s.dailySalesData;
+            dailyArchiveData = s.dailyArchiveData;
+            financeData = s.financeData;
+            document.getElementById('currentUsername').textContent = s.username;
+            renderActiveTab();
+            updateDashboard();
+            renderNotifications();
+        }
+        function renderActiveTab() {
+            const activeLi = document.querySelector('#mainMenu li.active');
+            const tab = activeLi ? activeLi.dataset.tab : 'dashboard';
+            if (tab === 'devices') renderDeviceLog();
+            if (tab === 'accessories') { renderAccessoryStock(); onAccessorySellTypeChange(); }
+            if (tab === 'installments') { renderInstallments(); renderCompletedInstallments(); }
+            if (tab === 'debts') renderDebts();
+            if (tab === 'finance') renderFinance();
+            if (tab === 'settings') renderDailyArchive();
+        }
+        function connectSocket() {
+            if (socket || typeof io === 'undefined') return;
+            socket = io(getServerBase(), { transports: ['websocket', 'polling'] });
+            socket.on('sync', debounce(() => { refreshState().catch(() => {}); }, 250));
+        }
+        function disconnectSocket() {
+            if (socket) { socket.disconnect(); socket = null; }
         }
 
         // =========================== تسجيل الدخول والخروج ===========================
-        const AUTH_KEY = 'auola_auth';
-        function getAuth() {
-            return JSON.parse(localStorage.getItem(AUTH_KEY)) || { username: 'admin', password: '1234' };
-        }
-        function saveAuth(u, p) { localStorage.setItem(AUTH_KEY, JSON.stringify({ username: u, password: p })); }
-
-        function showApp() {
+        async function showApp() {
+            try {
+                await initApp();
+            } catch (e) {
+                if (e.message !== 'unauthorized') alert('❌ ' + e.message);
+                showLogin();
+                return;
+            }
+            document.getElementById('serverSetupScreen').classList.add('hidden');
             document.getElementById('loginScreen').classList.add('hidden');
             document.getElementById('appContainer').classList.add('active');
-            document.getElementById('currentUsername').textContent = getAuth().username;
-            initApp();
+            connectSocket();
         }
         function showLogin() {
             document.getElementById('appContainer').classList.remove('active');
+            document.getElementById('serverSetupScreen').classList.add('hidden');
             document.getElementById('loginScreen').classList.remove('hidden');
-            document.getElementById('loginUsername').value = '';
             document.getElementById('loginPassword').value = '';
             document.getElementById('loginError').textContent = '';
         }
-        function attemptLogin(e) {
+        function forceLogout() {
+            localStorage.removeItem('auola_token');
+            disconnectSocket();
+            showLogin();
+        }
+        async function attemptLogin(e) {
             if (e) e.preventDefault();
             const u = document.getElementById('loginUsername').value.trim();
             const p = document.getElementById('loginPassword').value;
-            const auth = getAuth();
-            if (u === auth.username && p === auth.password) {
-                localStorage.setItem('auola_logged_in', '1');
-                showApp();
-            } else {
-                document.getElementById('loginError').textContent = '❌ اسم المستخدم أو كلمة المرور غير صحيحة';
+            const errBox = document.getElementById('loginError');
+            errBox.textContent = '';
+            try {
+                const res = await fetch(getServerBase() + '/api/login', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: u, password: p })
+                });
+                const body = await res.json().catch(() => ({}));
+                if (!res.ok) { errBox.textContent = '❌ ' + (body.error || 'خطأ في تسجيل الدخول'); return; }
+                localStorage.setItem('auola_token', body.token);
+                await showApp();
+            } catch (e) {
+                errBox.textContent = '❌ تعذر الاتصال بسيرفر المحل. تأكد من الشبكة وعنوان السيرفر.';
             }
         }
-        function logout() {
+        async function logout() {
             if (!confirm('تسجيل الخروج من النظام؟')) return;
-            localStorage.removeItem('auola_logged_in');
-            showLogin();
+            try { await apiFetch('/api/logout', { method: 'POST' }); } catch (e) {}
+            forceLogout();
         }
-        function updateCredentials() {
+        async function updateCredentials() {
             const u = document.getElementById('newUsername').value.trim();
             const p = document.getElementById('newPassword').value;
             if (!u || !p) { alert('يرجى إدخال اسم مستخدم وكلمة مرور.'); return; }
-            saveAuth(u, p);
-            document.getElementById('currentUsername').textContent = u;
-            document.getElementById('newUsername').value = '';
-            document.getElementById('newPassword').value = '';
-            alert('✅ تم تحديث بيانات الدخول. استخدمها في المرة القادمة لتسجيل الدخول.');
+            try {
+                await apiJson('/api/change-credentials', { method: 'POST', body: { username: u, password: p } });
+                document.getElementById('currentUsername').textContent = u;
+                document.getElementById('newUsername').value = '';
+                document.getElementById('newPassword').value = '';
+                alert('✅ تم تحديث بيانات الدخول. استخدمها في المرة القادمة لتسجيل الدخول.');
+            } catch (e) {
+                if (e.message !== 'unauthorized') alert('❌ ' + e.message);
+            }
+        }
+
+        // =========================== شاشة إعداد عنوان السيرفر (تطبيق أندرويد) ===========================
+        function saveServerSetup() {
+            const val = document.getElementById('serverSetupInput').value.trim().replace(/\/$/, '');
+            const errBox = document.getElementById('serverSetupError');
+            if (!val || !/^https?:\/\//i.test(val)) { errBox.textContent = '❌ أدخل عنوان صحيح يبدأ بـ http://'; return; }
+            localStorage.setItem('auola_server_url', val);
+            document.getElementById('serverSetupScreen').classList.add('hidden');
+            document.getElementById('loginScreen').classList.remove('hidden');
+        }
+        function updateServerAddress() {
+            const val = document.getElementById('serverAddressInput').value.trim().replace(/\/$/, '');
+            if (!val || !/^https?:\/\//i.test(val)) { alert('أدخل عنوان صحيح يبدأ بـ http://'); return; }
+            localStorage.setItem('auola_server_url', val);
+            localStorage.removeItem('auola_token');
+            location.reload();
         }
 
         // =========================== رمز الدخول السريع (QR) ===========================
@@ -744,11 +863,22 @@
             box.classList.toggle('hidden');
             if (willShow) renderLoginQR();
         }
-        function renderLoginQR() {
+        async function computeShareUrl() {
+            const localHosts = ['localhost', '127.0.0.1', '0.0.0.0', '::1'];
+            if (!localHosts.includes(location.hostname)) return location.origin;
+            try {
+                const res = await fetch(getServerBase() + '/api/network-info');
+                if (res.ok) {
+                    const info = await res.json();
+                    if (info.addresses && info.addresses.length) return `http://${info.addresses[0]}:${info.port}`;
+                }
+            } catch (e) {}
+            return location.origin;
+        }
+        async function renderLoginQR() {
             const canvas = document.getElementById('qrCanvas');
-            const url = location.href;
+            const url = await computeShareUrl();
             document.getElementById('qrUrlText').textContent = url;
-            document.getElementById('qrProtocolWarning').classList.toggle('hidden', location.protocol !== 'file:');
             if (typeof QRCode === 'undefined') {
                 document.getElementById('qrFallback').classList.remove('hidden');
                 canvas.classList.add('hidden');
@@ -764,8 +894,8 @@
                 }
             });
         }
-        function copyLoginLink() {
-            const url = location.href;
+        async function copyLoginLink() {
+            const url = document.getElementById('qrUrlText').textContent || await computeShareUrl();
             const btn = document.getElementById('copyLinkBtn');
             const done = () => { const old = btn.textContent; btn.textContent = '✅ تم النسخ'; setTimeout(() => btn.textContent = old, 1500); };
             if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -806,7 +936,7 @@
                 document.getElementById('pageTitleText').textContent = this.innerText.trim();
                 if (tab === 'dashboard') updateDashboard();
                 if (tab === 'devices') renderDeviceLog();
-                if (tab === 'accessories') renderAccessoryStock();
+                if (tab === 'accessories') { renderAccessoryStock(); onAccessorySellTypeChange(); }
                 if (tab === 'installments') { renderInstallments(); renderCompletedInstallments(); }
                 if (tab === 'debts') renderDebts();
                 if (tab === 'finance') renderFinance();
@@ -918,12 +1048,15 @@
         }
 
         // =========================== تهيئة التطبيق ===========================
-        function initApp() {
+        async function initApp() {
             document.getElementById('instRegDate').value = getTodayISO();
             document.getElementById('financeDate').value = getTodayISO();
-            updateDashboard();
+            if (isNativeApp()) document.getElementById('serverAddressCard').classList.remove('hidden');
+            document.getElementById('serverAddressInput').value = localStorage.getItem('auola_server_url') || '';
+            await refreshState();
             renderDeviceLog();
             renderAccessoryStock();
+            onAccessorySellTypeChange();
             renderInstallments();
             renderCompletedInstallments();
             renderDebts();
@@ -969,20 +1102,20 @@
             if (!item) return;
             alert(`📦 التفاصيل:\n${item.desc}\nالمبلغ: ${item.totalAmount.toLocaleString()}\nالربح: ${item.profitAmount.toLocaleString()}`);
         }
-        function resetTodaySales() {
+        async function resetTodaySales() {
             const today = new Date().toLocaleDateString();
             const daily = dailySalesData.filter(t => t.date === today);
             if (daily.length === 0) { alert('لا توجد مبيعات اليوم لتصفيرها.'); return; }
             if (!confirm(`سيتم أرشفة ${daily.length} عملية بيع لليوم وتصفير لوحة اليوم. متابعة؟`)) return;
-            const totalSales = daily.reduce((s,t) => s + t.totalAmount, 0);
-            const totalProfit = daily.reduce((s,t) => s + t.profitAmount, 0);
-            dailyArchiveData.push({ date: today, sales: daily, totalSales, totalProfit });
-            dailySalesData = dailySalesData.filter(t => t.date !== today);
-            saveData();
-            updateDashboard();
-            renderDailyArchive();
-            renderFinance();
-            alert('✅ تم تصفير مبيعات اليوم وأرشفتها.');
+            try {
+                await apiJson('/api/sales/reset-today', { method: 'POST' });
+                await refreshState();
+                renderDailyArchive();
+                renderFinance();
+                alert('✅ تم تصفير مبيعات اليوم وأرشفتها.');
+            } catch (e) {
+                if (e.message !== 'unauthorized') alert('❌ ' + e.message);
+            }
         }
         function showLowStockAlert() {
             const low = accessoryStock.filter(p => p.qty <= 2);
@@ -1034,15 +1167,12 @@
                 if (!confirm(`تنبيه: يوجد جهاز مسجل مسبقاً بنفس IMEI (${imei}). هل تريد المتابعة؟`)) return;
             }
             const image = await readFileAsDataURL(document.getElementById('devImage'));
-            const now = new Date();
-            const profit = (sell - cost) * qty;
-            const record = {
-                id: Date.now(), date: now.toLocaleDateString(), time: now.toLocaleTimeString(),
-                model, storage, sim, battery, imei, damaged, cost, sell, qty, note, image, profit
-            };
-            deviceSalesLog.unshift(record);
-            dailySalesData.push({ date: record.date, time: record.time, desc: `بيع جهاز: ${model} (${storage})`, totalAmount: sell * qty, profitAmount: profit });
-            saveData();
+            try {
+                await apiJson('/api/devices', { method: 'POST', body: { model, storage, sim, battery, imei, damaged, cost, sell, qty, note, image } });
+            } catch (e) {
+                if (e.message !== 'unauthorized') alert('❌ ' + e.message);
+                return;
+            }
 
             modelSelect.value = 'iPhone 11';
             document.getElementById('devModelOther').value = '';
@@ -1055,8 +1185,7 @@
             document.getElementById('devNote').value = '';
             document.getElementById('devImage').value = '';
 
-            renderDeviceLog();
-            updateDashboard();
+            await refreshState();
             drawChart();
             alert('✅ تم تسجيل بيع الجهاز بنجاح.');
         }
@@ -1082,11 +1211,14 @@
                 </tr>`
             ).join('') || '<tr><td colspan="13" style="text-align:center;color:var(--text-muted);">لا توجد أجهزة مباعة مطابقة</td></tr>';
         }
-        function deleteDeviceLog(id) {
+        async function deleteDeviceLog(id) {
             if (!confirm('حذف هذا السجل نهائياً؟')) return;
-            deviceSalesLog = deviceSalesLog.filter(d => d.id !== id);
-            saveData();
-            renderDeviceLog();
+            try {
+                await apiJson('/api/devices/' + id, { method: 'DELETE' });
+                await refreshState();
+            } catch (e) {
+                if (e.message !== 'unauthorized') alert('❌ ' + e.message);
+            }
         }
         function viewDeviceImage(id) {
             const d = deviceSalesLog.find(x => x.id === id);
@@ -1106,24 +1238,19 @@
             if (isNaN(cost) || isNaN(qty) || qty <= 0) { alert('يرجى إدخال الكلفة والكمية بشكل صحيح.'); return; }
             const image = await readFileAsDataURL(document.getElementById('accStockImage'));
 
-            const existing = accessoryStock.find(p => p.type === type && p.brand === brand && (p.extra || '') === extra);
-            if (existing) {
-                const newQty = existing.qty + qty;
-                existing.cost = ((existing.cost * existing.qty) + (cost * qty)) / newQty;
-                existing.qty = newQty;
-                if (note) existing.note = note;
-                if (image) existing.image = image;
-            } else {
-                accessoryStock.unshift({ id: Date.now(), type, brand, extra, cost, qty, note, image });
+            try {
+                await apiJson('/api/accessory-stock', { method: 'POST', body: { type, brand, extra, cost, qty, note, image } });
+            } catch (e) {
+                if (e.message !== 'unauthorized') alert('❌ ' + e.message);
+                return;
             }
-            saveData();
             document.getElementById('accStockExtra').value = '';
             document.getElementById('accStockCost').value = '';
             document.getElementById('accStockQty').value = '1';
             document.getElementById('accStockNote').value = '';
             document.getElementById('accStockImage').value = '';
-            renderAccessoryStock();
-            updateDashboard();
+            await refreshState();
+            onAccessorySellTypeChange();
             alert('✅ تمت إضافة الإكسسوار للمخزون.');
         }
         function renderAccessoryStock() {
@@ -1143,12 +1270,15 @@
                 </tr>`
             ).join('') || '<tr><td colspan="8" style="text-align:center;color:var(--text-muted);">لا توجد مواد في المخزون</td></tr>';
         }
-        function deleteAccessoryStock(id) {
+        async function deleteAccessoryStock(id) {
             if (!confirm('حذف هذه المادة نهائياً من المخزون؟')) return;
-            accessoryStock = accessoryStock.filter(p => p.id !== id);
-            saveData();
-            renderAccessoryStock();
-            onAccessorySellTypeChange();
+            try {
+                await apiJson('/api/accessory-stock/' + id, { method: 'DELETE' });
+                await refreshState();
+                onAccessorySellTypeChange();
+            } catch (e) {
+                if (e.message !== 'unauthorized') alert('❌ ' + e.message);
+            }
         }
         function onAccessorySellTypeChange() {
             const type = document.getElementById('accSellType').value;
@@ -1169,18 +1299,19 @@
             const id = parseFloat(document.getElementById('accSellPiece').value);
             const item = accessoryStock.find(p => p.id === id);
             if (!item) { alert('يرجى اختيار قطعة من المخزون.'); return; }
-            const cost = parseFloat(document.getElementById('accSellCost').value);
+            const cost = document.getElementById('accSellCost').value;
             const price = parseFloat(document.getElementById('accSellPrice').value);
             const qty = parseInt(document.getElementById('accSellQty').value) || 1;
             const note = document.getElementById('accSellNote').value.trim();
             if (isNaN(price)) { alert('يرجى إدخال سعر البيع.'); return; }
             if (qty > item.qty) { alert('الكمية المطلوبة أكبر من المتوفر بالمخزون.'); return; }
 
-            item.qty -= qty;
-            const profit = (price - (isNaN(cost) ? item.cost : cost)) * qty;
-            const now = new Date();
-            dailySalesData.push({ date: now.toLocaleDateString(), time: now.toLocaleTimeString(), desc: `بيع إكسسوار: ${item.type} (${item.brand})`, totalAmount: price * qty, profitAmount: profit });
-            saveData();
+            try {
+                await apiJson('/api/accessory-stock/sell', { method: 'POST', body: { pieceId: id, cost, price, qty, note } });
+            } catch (e) {
+                if (e.message !== 'unauthorized') alert('❌ ' + e.message);
+                return;
+            }
 
             document.getElementById('accSellType').value = '';
             document.getElementById('accSellPiece').innerHTML = '<option value="">-- اختر النوعية --</option>';
@@ -1190,8 +1321,7 @@
             document.getElementById('accSellNote').value = '';
             document.getElementById('accSellAvailable').textContent = '-';
 
-            renderAccessoryStock();
-            updateDashboard();
+            await refreshState();
             drawChart();
             alert('✅ تمت عملية البيع بنجاح.');
         }
@@ -1202,25 +1332,25 @@
             const paid = parseFloat(document.getElementById('instPaid').value) || 0;
             if (!isNaN(total)) document.getElementById('instRemaining').value = total - paid;
         }
-        function addInstallmentContract() {
+        async function addInstallmentContract() {
             const customer = document.getElementById('instCustomer').value.trim();
             const phone = document.getElementById('instPhone').value.trim();
             const deviceName = document.getElementById('instDeviceName').value.trim();
             const total = parseFloat(document.getElementById('instTotal').value);
             const paid = parseFloat(document.getElementById('instPaid').value) || 0;
             const months = parseInt(document.getElementById('instMonths').value);
-            const remMonths = parseInt(document.getElementById('instRemMonths').value) || months;
-            const remaining = parseFloat(document.getElementById('instRemaining').value) || (total - paid);
+            const remMonths = document.getElementById('instRemMonths').value;
+            const remaining = document.getElementById('instRemaining').value;
             const regDate = document.getElementById('instRegDate').value || getTodayISO();
             const note = document.getElementById('instNote').value.trim();
             if (!customer || isNaN(total) || months <= 0) { alert('يرجى ملء البيانات الأساسية (الاسم، المبلغ الكلي، عدد الأشهر).'); return; }
-            installmentsData.push({
-                id: Date.now(), date: new Date(regDate).toLocaleDateString(), regDate,
-                customer, phone, deviceName: deviceName || 'غير محدد', months, total, paid, remaining, remMonths, note: note || 'بدون ملاحظة'
-            });
-            saveData();
-            renderInstallments();
-            renderNotifications();
+            try {
+                await apiJson('/api/installments', { method: 'POST', body: { customer, phone, deviceName, total, paid, months, remMonths, remaining, regDate, note } });
+            } catch (e) {
+                if (e.message !== 'unauthorized') alert('❌ ' + e.message);
+                return;
+            }
+            await refreshState();
             document.getElementById('instCustomer').value = '';
             document.getElementById('instPhone').value = '';
             document.getElementById('instDeviceName').value = '';
@@ -1238,14 +1368,13 @@
             const tbody = document.getElementById('installmentsTable');
             const active = installmentsData.filter(i => i.remaining > 0 && (i.customer.toLowerCase().includes(q) || (i.phone||'').includes(q)));
             tbody.innerHTML = active.map((i) => {
-                const idx = installmentsData.indexOf(i);
                 const isDueSoon = i.remMonths <= 1;
                 return `<tr${isDueSoon ? ' style="background:rgba(245,165,36,.12);"' : ''}>
                 <td>${i.date}</td><td>${i.customer}</td><td>${i.phone||'-'}</td><td>${i.deviceName}</td>
                 <td>${i.months}</td><td>${i.total.toLocaleString()}</td><td>${i.paid.toLocaleString()}</td>
                 <td>${i.remaining.toLocaleString()}</td><td>${isDueSoon ? '🔔 ' : ''}${i.remMonths}</td><td>${i.note||'-'}</td>
-                <td><button class="btn btn-success btn-sm" onclick="payInstallmentPart(${idx})">تسديد</button>
-                <button class="btn btn-danger btn-sm" onclick="deleteInstallmentContract(${idx})">حذف</button></td></tr>`;
+                <td><button class="btn btn-success btn-sm" onclick="payInstallmentPart(${i.id})">تسديد</button>
+                <button class="btn btn-danger btn-sm" onclick="deleteInstallmentContract(${i.id})">حذف</button></td></tr>`;
             }).join('') || '<tr><td colspan="11" style="text-align:center;color:var(--text-muted);">لا توجد عقود أقساط مطابقة</td></tr>';
         }
         function renderCompletedInstallments() {
@@ -1254,37 +1383,32 @@
                 `<tr><td>${i.date}</td><td>${i.customer}</td><td>${i.deviceName}</td><td>${i.total.toLocaleString()}</td><td>${i.note}</td></tr>`
             ).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);">لا توجد أقساط مكتملة</td></tr>';
         }
-        function payInstallmentPart(idx) {
-            const inst = installmentsData[idx];
+        async function payInstallmentPart(id) {
+            const inst = installmentsData.find(i => i.id === id);
+            if (!inst) return;
             const amount = parseFloat(prompt(`المتبقي: ${inst.remaining.toLocaleString()}\nأدخل مبلغ التسديد:`));
             if (isNaN(amount) || amount <= 0) return;
-            if (amount > inst.remaining) { alert('المبلغ أكبر من المتبقي.'); return; }
-            inst.remaining -= amount;
-            inst.paid += amount;
-            inst.remMonths = Math.max(0, inst.remMonths - 1);
-            const now = new Date();
-            dailySalesData.push({ date: now.toLocaleDateString(), time: now.toLocaleTimeString(), desc: `تسديد قسط (${inst.customer})`, totalAmount: amount, profitAmount: 0 });
-            if (inst.remaining === 0) {
-                completedInstallmentsData.push(installmentsData.splice(idx, 1)[0]);
-                alert('✅ تم تسديد القسط بالكامل.');
+            try {
+                const result = await apiJson(`/api/installments/${id}/pay`, { method: 'POST', body: { amount } });
+                await refreshState();
+                renderCompletedInstallments();
+                if (result.completed) alert('✅ تم تسديد القسط بالكامل.');
+            } catch (e) {
+                if (e.message !== 'unauthorized') alert('❌ ' + e.message);
             }
-            saveData();
-            renderInstallments();
-            renderCompletedInstallments();
-            updateDashboard();
-            renderNotifications();
         }
-        function deleteInstallmentContract(idx) {
-            if (confirm('حذف عقد القسط؟')) {
-                installmentsData.splice(idx, 1);
-                saveData();
-                renderInstallments();
-                updateDashboard();
+        async function deleteInstallmentContract(id) {
+            if (!confirm('حذف عقد القسط؟')) return;
+            try {
+                await apiJson('/api/installments/' + id, { method: 'DELETE' });
+                await refreshState();
+            } catch (e) {
+                if (e.message !== 'unauthorized') alert('❌ ' + e.message);
             }
         }
 
         // =========================== الديون ===========================
-        function addDebtManual() {
+        async function addDebtManual() {
             const customer = document.getElementById('debtCustomer').value.trim();
             const phone = document.getElementById('debtPhone').value.trim();
             const details = document.getElementById('debtDetails').value.trim();
@@ -1292,19 +1416,19 @@
             const dueDate = document.getElementById('debtDueDate').value;
             const note = document.getElementById('debtNote').value.trim();
             if (!customer || isNaN(total) || total <= 0) { alert('يرجى إدخال اسم الزبون ومبلغ الدين بشكل صحيح.'); return; }
-            debtsData.push({
-                id: Date.now(), date: new Date().toLocaleDateString(), customer, phone,
-                desc: details || 'دين', total, remaining: total, paid: 0, dueDate: dueDate || '', note
-            });
-            saveData();
+            try {
+                await apiJson('/api/debts', { method: 'POST', body: { customer, phone, details, total, dueDate, note } });
+            } catch (e) {
+                if (e.message !== 'unauthorized') alert('❌ ' + e.message);
+                return;
+            }
             document.getElementById('debtCustomer').value = '';
             document.getElementById('debtPhone').value = '';
             document.getElementById('debtDetails').value = '';
             document.getElementById('debtTotal').value = '';
             document.getElementById('debtDueDate').value = '';
             document.getElementById('debtNote').value = '';
-            renderDebts();
-            renderNotifications();
+            await refreshState();
             alert('✅ تم حفظ الدين بنجاح.');
         }
         function renderDebts() {
@@ -1313,65 +1437,66 @@
             const today = getTodayISO();
             const filtered = debtsData.filter(d => d.customer.toLowerCase().includes(q) || (d.phone||'').includes(q));
             tbody.innerHTML = filtered.map((d) => {
-                const idx = debtsData.indexOf(d);
                 const isDue = d.dueDate && d.dueDate === today;
                 return `<tr${isDue ? ' style="background:rgba(245,165,36,.12);"' : ''}><td>${d.date}</td><td>${d.customer}</td><td>${d.phone||'-'}</td>
                 <td>${d.desc}</td><td>${d.total.toLocaleString()}</td><td>${d.remaining.toLocaleString()}</td>
                 <td>${isDue ? '🔔 ' : ''}${d.dueDate || 'غير محدد'}</td>
-                <td><button class="btn btn-success btn-sm" onclick="payDebtAmount(${idx})">تسديد</button>
-                <button class="btn btn-danger btn-sm" onclick="deleteDebtRecord(${idx})">حذف</button></td></tr>`;
+                <td><button class="btn btn-success btn-sm" onclick="payDebtAmount(${d.id})">تسديد</button>
+                <button class="btn btn-danger btn-sm" onclick="deleteDebtRecord(${d.id})">حذف</button></td></tr>`;
             }).join('') || '<tr><td colspan="8" style="text-align:center;color:var(--text-muted);">لا توجد ديون مطابقة</td></tr>';
         }
-        function payDebtAmount(idx) {
-            const debt = debtsData[idx];
+        async function payDebtAmount(id) {
+            const debt = debtsData.find(d => d.id === id);
+            if (!debt) return;
             const amount = parseFloat(prompt(`المتبقي: ${debt.remaining.toLocaleString()}\nأدخل مبلغ التسديد:`));
             if (isNaN(amount) || amount <= 0) return;
-            if (amount > debt.remaining) { alert('المبلغ أكبر من المتبقي.'); return; }
-            debt.remaining -= amount;
-            debt.paid += amount;
-            const now = new Date();
-            dailySalesData.push({ date: now.toLocaleDateString(), time: now.toLocaleTimeString(), desc: `تسديد دين (${debt.customer})`, totalAmount: amount, profitAmount: 0 });
-            if (debt.remaining === 0) {
-                debtsData.splice(idx, 1);
-                alert('✅ تم سداد الدين بالكامل.');
+            try {
+                const result = await apiJson(`/api/debts/${id}/pay`, { method: 'POST', body: { amount } });
+                await refreshState();
+                if (result.settled) alert('✅ تم سداد الدين بالكامل.');
+            } catch (e) {
+                if (e.message !== 'unauthorized') alert('❌ ' + e.message);
             }
-            saveData();
-            renderDebts();
-            updateDashboard();
-            renderNotifications();
         }
-        function deleteDebtRecord(idx) {
-            if (confirm('حذف سجل الدين؟')) {
-                debtsData.splice(idx, 1);
-                saveData();
-                renderDebts();
-                updateDashboard();
-                renderNotifications();
+        async function deleteDebtRecord(id) {
+            if (!confirm('حذف سجل الدين؟')) return;
+            try {
+                await apiJson('/api/debts/' + id, { method: 'DELETE' });
+                await refreshState();
+            } catch (e) {
+                if (e.message !== 'unauthorized') alert('❌ ' + e.message);
             }
         }
 
         // =========================== الأرباح والمصاريف ===========================
-        function addFinanceEntry() {
+        async function addFinanceEntry() {
             const type = document.getElementById('financeType').value;
             const desc = document.getElementById('financeDesc').value.trim();
             const amount = parseFloat(document.getElementById('financeAmount').value);
             const date = document.getElementById('financeDate').value || getTodayISO();
             const note = document.getElementById('financeNote').value.trim();
             if (!desc || isNaN(amount) || amount <= 0) { alert('يرجى إدخال الوصف والمبلغ بشكل صحيح.'); return; }
-            financeData.unshift({ id: Date.now(), type, desc, amount, date, note });
-            saveData();
+            try {
+                await apiJson('/api/finance', { method: 'POST', body: { type, desc, amount, date, note } });
+            } catch (e) {
+                if (e.message !== 'unauthorized') alert('❌ ' + e.message);
+                return;
+            }
             document.getElementById('financeDesc').value = '';
             document.getElementById('financeAmount').value = '';
             document.getElementById('financeDate').value = getTodayISO();
             document.getElementById('financeNote').value = '';
-            renderFinance();
+            await refreshState();
             alert('✅ تم حفظ الحركة المالية.');
         }
-        function deleteFinanceEntry(id) {
+        async function deleteFinanceEntry(id) {
             if (!confirm('حذف هذه الحركة المالية؟')) return;
-            financeData = financeData.filter(f => f.id !== id);
-            saveData();
-            renderFinance();
+            try {
+                await apiJson('/api/finance/' + id, { method: 'DELETE' });
+                await refreshState();
+            } catch (e) {
+                if (e.message !== 'unauthorized') alert('❌ ' + e.message);
+            }
         }
         function renderFinance() {
             const totalSales = dailySalesData.reduce((s,t) => s + t.totalAmount, 0);
@@ -1482,27 +1607,30 @@
             win.document.close();
             win.print();
         }
-        function exportFullBackup() {
-            const backup = { deviceSalesLog, accessoryStock, installmentsData, completedInstallmentsData, debtsData, dailySalesData, dailyArchiveData, financeData };
-            const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = `auola_backup_${new Date().toISOString().slice(0,10)}.json`;
-            link.click();
-            alert('✅ تم تنزيل النسخة الاحتياطية.');
+        async function exportFullBackup() {
+            try {
+                const res = await apiFetch('/api/backup');
+                const backup = await res.json();
+                const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = `auola_backup_${new Date().toISOString().slice(0,10)}.json`;
+                link.click();
+                alert('✅ تم تنزيل النسخة الاحتياطية.');
+            } catch (e) {
+                if (e.message !== 'unauthorized') alert('❌ ' + e.message);
+            }
         }
 
         // =========================== الإعدادات ===========================
-        function clearAllData() {
-            if (confirm('⚠️ حذف كل البيانات نهائياً؟')) {
-                if (confirm('تأكيد نهائي: لا يمكن التراجع.')) {
-                    const auth = getAuth();
-                    const theme = localStorage.getItem('auola_theme');
-                    localStorage.clear();
-                    saveAuth(auth.username, auth.password);
-                    if (theme) localStorage.setItem('auola_theme', theme);
-                    location.reload();
-                }
+        async function clearAllData() {
+            if (!confirm('⚠️ حذف كل البيانات نهائياً؟')) return;
+            if (!confirm('تأكيد نهائي: لا يمكن التراجع.')) return;
+            try {
+                await apiJson('/api/clear-all', { method: 'POST' });
+                location.reload();
+            } catch (e) {
+                if (e.message !== 'unauthorized') alert('❌ ' + e.message);
             }
         }
 
@@ -1572,21 +1700,30 @@
         setInterval(() => { if (document.getElementById('appContainer').classList.contains('active')) renderNotifications(true); }, 5 * 60 * 1000);
 
         // =========================== بدء التشغيل ===========================
+        function boot() {
+            if (isNativeApp() && !localStorage.getItem('auola_server_url')) {
+                document.getElementById('loginScreen').classList.add('hidden');
+                document.getElementById('serverSetupScreen').classList.remove('hidden');
+                return;
+            }
+            if (localStorage.getItem('auola_token')) {
+                showApp();
+            } else {
+                showLogin();
+            }
+        }
         window.addEventListener('DOMContentLoaded', function () {
             document.getElementById('loginForm').addEventListener('submit', attemptLogin);
             document.getElementById('qrToggleBtn').addEventListener('click', toggleLoginQR);
             document.getElementById('copyLinkBtn').addEventListener('click', copyLoginLink);
             document.getElementById('logoutBtn').addEventListener('click', logout);
             document.getElementById('nightModeBtn').addEventListener('click', toggleNightMode);
+            document.getElementById('serverSetupBtn').addEventListener('click', saveServerSetup);
 
             applyStoredTheme();
             document.getElementById('dateBadge').textContent = '📅 ' + new Date().toLocaleDateString('ar');
 
-            if (localStorage.getItem('auola_logged_in') === '1') {
-                showApp();
-            } else {
-                showLogin();
-            }
+            boot();
         });
     </script>
 </body>

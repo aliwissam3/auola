@@ -1,0 +1,8 @@
+{
+  "appId": "com.auola.app",
+  "appName": "AUOLA",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  }
+}
