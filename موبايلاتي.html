@@ -143,10 +143,10 @@
         <div id="lockBarcodeSection" class="hidden">
             <div class="lock-divider"><div class="line"></div><span>أو</span><div class="line"></div></div>
             <div class="barcode-input-row">
-                <input type="text" id="lockBarcodeInput" placeholder="امسح باركود الدخول" onkeydown="handleLockBarcodeKey(event)">
-                <button type="button" class="icon-btn" onclick="openBarcodeScanner('lockBarcodeInput')" title="مسح بالكاميرا">📷</button>
+                <input type="text" id="lockBarcodeInput" placeholder="امسح باركود الدخول (قارئ USB)" onkeydown="handleLockBarcodeKey(event)">
             </div>
-            <button type="button" id="phoneScanBtn" class="btn btn-dark hidden" style="width:100%;margin-top:10px;justify-content:center;" onclick="openPhoneScanModal()">📱 امسح عبر الهاتف (نفس الشبكة)</button>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:6px;">عندك قارئ باركود USB؟ وجّه المؤشر هنا وامسح مباشرة بدون أي زر.</div>
+            <button type="button" id="phoneScanBtn" class="btn btn-dark hidden" style="width:100%;margin-top:10px;justify-content:center;" onclick="openPhoneScanModal()">📱 امسح بكاميرا الهاتف</button>
         </div>
         <div class="lock-hint">هذا التطبيق يعمل بالكامل بدون إنترنت، وبياناته محفوظة على هذا الجهاز فقط.</div>
     </div>
@@ -525,14 +525,20 @@ function renderLockScreen() {
     lockInput.value = ''; lockInputConfirm.value = ''; lockError.textContent = '';
     const barcodeSection = document.getElementById('lockBarcodeSection');
     const lockBarcodeInput = document.getElementById('lockBarcodeInput');
-    if (!isFirstRun() && localStorage.getItem('mb_loginBarcode')) {
+    const hasLoginBarcode = !isFirstRun() && !!localStorage.getItem('mb_loginBarcode');
+    if (hasLoginBarcode) {
         barcodeSection.classList.remove('hidden');
         document.getElementById('phoneScanBtn').classList.toggle('hidden', !window.electronAPI);
     } else {
         barcodeSection.classList.add('hidden');
     }
     if (lockBarcodeInput) lockBarcodeInput.value = '';
-    lockInput.focus();
+    // A USB/Bluetooth scanner just "types" into whatever field has focus, so
+    // when a login barcode is set up, default focus there instead of the
+    // password field - the cashier can scan immediately without clicking
+    // anything first. Typing the password is still one click away.
+    if (hasLoginBarcode) lockBarcodeInput.focus();
+    else lockInput.focus();
 }
 function handleLockBarcodeKey(e) {
     if (e.key === 'Enter') { e.preventDefault(); checkLoginBarcode(); }
