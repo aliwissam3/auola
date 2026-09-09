@@ -169,6 +169,10 @@
         <div class="scan-hint">افتح كاميرا هاتفك على رمز QR هذا، أو افتح الرابط يدوياً من متصفح الهاتف. تأكد الهاتف والحاسوب على نفس شبكة الواي فاي.</div>
         <img id="phoneScanQr" style="width:220px;height:220px;margin:10px auto;display:block;border-radius:10px;background:#fff;padding:8px;">
         <div class="barcode-text" id="phoneScanUrl" style="display:block;margin:10px 0;word-break:break-all;"></div>
+        <div id="phoneScanAltWrap" class="hidden" style="text-align:right;margin:10px 0;">
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;">إذا رمز QR ما اشتغل (شبكة فيها أكثر من كارت شبكة)، جرب هذا الرابط يدوياً من متصفح الهاتف بدل الأول:</div>
+            <div id="phoneScanAltList"></div>
+        </div>
         <div class="scan-hint" id="phoneScanStatus">⏳ بانتظار المسح من الهاتف...</div>
         <button class="btn btn-danger" style="width:100%;" onclick="closePhoneScanModal()">إغلاق</button>
     </div>
@@ -536,10 +540,21 @@ function handleLockBarcodeKey(e) {
 async function openPhoneScanModal() {
     document.getElementById('phoneScanModal').classList.remove('hidden');
     document.getElementById('phoneScanStatus').textContent = '⏳ بانتظار المسح من الهاتف...';
+    document.getElementById('phoneScanAltWrap').classList.add('hidden');
     if (!window.electronAPI) return;
     const info = await window.electronAPI.getPhoneScanInfo();
+    if (!info.url) {
+        document.getElementById('phoneScanUrl').textContent = '';
+        document.getElementById('phoneScanStatus').textContent = '⚠️ تعذر تشغيل السيرفر المحلي. أعد فتح التطبيق وحاول مرة ثانية.';
+        return;
+    }
     document.getElementById('phoneScanUrl').textContent = info.url;
     if (info.qr) document.getElementById('phoneScanQr').src = info.qr;
+    const altUrls = (info.candidates || []).slice(1);
+    if (altUrls.length) {
+        document.getElementById('phoneScanAltWrap').classList.remove('hidden');
+        document.getElementById('phoneScanAltList').innerHTML = altUrls.map(u => `<div class="barcode-text" style="display:block;margin-bottom:6px;word-break:break-all;">${u}</div>`).join('');
+    }
 }
 function closePhoneScanModal() {
     document.getElementById('phoneScanModal').classList.add('hidden');
