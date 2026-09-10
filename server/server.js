@@ -82,77 +82,52 @@ function createServer() {
         res.json({ ...store.getState(), username: req.username });
     });
 
-    // ============ الأجهزة ============
-    app.post('/api/devices', (req, res) => {
-        const record = store.addDevice(req.body || {});
-        broadcastSync();
-        res.json(record);
-    });
-    app.delete('/api/devices/:id', (req, res) => {
-        store.deleteDevice(Number(req.params.id));
-        broadcastSync();
-        res.json({ ok: true });
-    });
-
-    // ============ الإكسسوارات ============
-    app.post('/api/accessory-stock', (req, res) => {
-        const record = store.addAccessoryStock(req.body || {});
-        broadcastSync();
-        res.json(record);
-    });
-    app.delete('/api/accessory-stock/:id', (req, res) => {
-        store.deleteAccessoryStock(Number(req.params.id));
-        broadcastSync();
-        res.json({ ok: true });
-    });
-    app.post('/api/accessory-stock/sell', (req, res) => {
+    // ============ المنتجات (مخزون موحّد) ============
+    app.post('/api/products', (req, res) => {
         try {
-            const result = store.sellAccessory(req.body || {});
+            const record = store.addProduct(req.body || {});
             broadcastSync();
-            res.json(result);
+            res.json(record);
+        } catch (e) {
+            res.status(400).json({ error: e.message });
+        }
+    });
+    app.put('/api/products/:id', (req, res) => {
+        try {
+            const record = store.updateProduct(Number(req.params.id), req.body || {});
+            broadcastSync();
+            res.json(record);
+        } catch (e) {
+            res.status(400).json({ error: e.message });
+        }
+    });
+    app.delete('/api/products/:id', (req, res) => {
+        store.deleteProduct(Number(req.params.id));
+        broadcastSync();
+        res.json({ ok: true });
+    });
+    app.post('/api/products/sell', (req, res) => {
+        try {
+            const sale = store.sellProducts(req.body || {});
+            broadcastSync();
+            res.json(sale);
         } catch (e) {
             res.status(400).json({ error: e.message });
         }
     });
 
-    // ============ الأقساط ============
-    app.post('/api/installments', (req, res) => {
-        const record = store.addInstallment(req.body || {});
-        broadcastSync();
-        res.json(record);
-    });
-    app.post('/api/installments/:id/pay', (req, res) => {
+    // ============ الموظفين ============
+    app.post('/api/employees', (req, res) => {
         try {
-            const result = store.payInstallment(Number(req.params.id), req.body && req.body.amount);
+            const record = store.addEmployee(req.body && req.body.name);
             broadcastSync();
-            res.json(result);
+            res.json(record);
         } catch (e) {
             res.status(400).json({ error: e.message });
         }
     });
-    app.delete('/api/installments/:id', (req, res) => {
-        store.deleteInstallment(Number(req.params.id));
-        broadcastSync();
-        res.json({ ok: true });
-    });
-
-    // ============ الديون ============
-    app.post('/api/debts', (req, res) => {
-        const record = store.addDebt(req.body || {});
-        broadcastSync();
-        res.json(record);
-    });
-    app.post('/api/debts/:id/pay', (req, res) => {
-        try {
-            const result = store.payDebt(Number(req.params.id), req.body && req.body.amount);
-            broadcastSync();
-            res.json(result);
-        } catch (e) {
-            res.status(400).json({ error: e.message });
-        }
-    });
-    app.delete('/api/debts/:id', (req, res) => {
-        store.deleteDebt(Number(req.params.id));
+    app.delete('/api/employees/:id', (req, res) => {
+        store.deleteEmployee(Number(req.params.id));
         broadcastSync();
         res.json({ ok: true });
     });
@@ -169,6 +144,31 @@ function createServer() {
     });
     app.delete('/api/finance/:id', (req, res) => {
         store.deleteFinanceEntry(Number(req.params.id));
+        broadcastSync();
+        res.json({ ok: true });
+    });
+
+    // ============ الديون ============
+    app.post('/api/debts', (req, res) => {
+        try {
+            const record = store.addDebt(req.body || {});
+            broadcastSync();
+            res.json(record);
+        } catch (e) {
+            res.status(400).json({ error: e.message });
+        }
+    });
+    app.post('/api/debts/:id/pay', (req, res) => {
+        try {
+            const record = store.addDebtPayment(Number(req.params.id), req.body && req.body.amount);
+            broadcastSync();
+            res.json(record);
+        } catch (e) {
+            res.status(400).json({ error: e.message });
+        }
+    });
+    app.delete('/api/debts/:id', (req, res) => {
+        store.deleteDebt(Number(req.params.id));
         broadcastSync();
         res.json({ ok: true });
     });
