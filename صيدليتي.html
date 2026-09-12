@@ -468,6 +468,13 @@
                 </div>
             </div>
             <div class="card">
+                <div class="card-header"><h3>🔍 حركة المادة</h3></div>
+                <div class="form-grid">
+                    <div class="form-group"><label>المادة</label><select id="movementItemId" onchange="renderItemMovement()"></select></div>
+                </div>
+                <div id="movementResult"></div>
+            </div>
+            <div class="card">
                 <div class="card-header"><h3>🔻 المسحوبات (المواد المباعة اليوم)</h3></div>
                 <div class="table-wrap">
                     <table>
@@ -1802,6 +1809,65 @@ function renderInventory() {
             <td><button class="btn btn-danger btn-sm" onclick="deleteInventoryItem(${p.id})">حذف</button></td>
         </tr>`;
     }).join('') || '<tr><td colspan="10" style="text-align:center;color:#999;">لا توجد أدوية</td></tr>';
+    const moveSel = document.getElementById('movementItemId');
+    if (moveSel) {
+        const current = moveSel.value;
+        moveSel.innerHTML = inventoryData.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+        moveSel.value = current;
+        renderItemMovement();
+    }
+}
+function renderItemMovement() {
+    const result = document.getElementById('movementResult');
+    if (!result) return;
+    const itemId = document.getElementById('movementItemId').value ? Number(document.getElementById('movementItemId').value) : '';
+    const prod = inventoryData.find(p => p.id === itemId);
+    if (!prod) { result.innerHTML = '<p style="color:#999;">لا توجد مادة محددة.</p>'; return; }
+    const name = prod.name;
+
+    const inRows = [];
+    purchasesData.forEach(pu => {
+        (pu.items || []).forEach(it => {
+            if (it.name === name) {
+                const sup = suppliers.find(s => s.id === pu.supplierId);
+                inRows.push({ date: pu.date, qty: it.qty, ref: `شراء من ${sup ? sup.name : 'مذخر'}` });
+            }
+        });
+    });
+    customerReturnsData.forEach(r => { if (r.itemId === itemId) inRows.push({ date: r.date, qty: r.qty, ref: 'مرتجع زبون' }); });
+
+    const outRows = [];
+    dailySalesData.forEach(s => {
+        (s.items || []).forEach(it => { if (it.id === itemId) outRows.push({ date: s.date, qty: it.qty, ref: 'بيع' }); });
+    });
+    debtsData.forEach(d => {
+        (d.items || []).forEach(it => { if (it.id === itemId) outRows.push({ date: d.date, qty: it.qty, ref: `بيع بالدين (${d.customer})` }); });
+    });
+    supplierReturnsData.forEach(r => {
+        if (r.itemId === itemId) {
+            const sup = suppliers.find(s => s.id === r.supplierId);
+            outRows.push({ date: r.date, qty: r.qty, ref: `إرجاع لـ${sup ? sup.name : 'مذخر'}` });
+        }
+    });
+
+    const totalIn = inRows.reduce((s, r) => s + r.qty, 0);
+    const totalOut = outRows.reduce((s, r) => s + r.qty, 0);
+    const rowsHtml = (rows, emptyMsg) => rows.length ? `<div class="table-wrap"><table>
+        <thead><tr><th>التاريخ</th><th>الكمية</th><th>البيان</th></tr></thead>
+        <tbody>${rows.map(r => `<tr><td>${r.date}</td><td>${r.qty}</td><td>${r.ref}</td></tr>`).join('')}</tbody>
+        </table></div>` : `<p style="color:#999;font-size:13px;">${emptyMsg}</p>`;
+
+    result.innerHTML = `
+        <div style="margin:10px 0;font-weight:bold;display:flex;gap:20px;flex-wrap:wrap;">
+            <span>الكمية الحالية بالمخزون: ${prod.qty}</span>
+            <span style="color:green;">إجمالي الوارد: ${totalIn}</span>
+            <span style="color:#d32f2f;">إجمالي الصادر: ${totalOut}</span>
+        </div>
+        <h4 style="margin:10px 0 6px;color:green;">⬇️ وارد (شراء / مرتجعات زبائن)</h4>
+        ${rowsHtml(inRows, 'لا يوجد وارد مسجل لهذه المادة.')}
+        <h4 style="margin:14px 0 6px;color:#d32f2f;">⬆️ صادر (بيع / إرجاع للمذخر)</h4>
+        ${rowsHtml(outRows, 'لا يوجد صادر مسجل لهذه المادة.')}
+    `;
 }
 function deleteInventoryItem(id) {
     if (confirm('حذف الدواء نهائياً؟')) {
