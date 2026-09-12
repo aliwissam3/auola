@@ -210,9 +210,10 @@
     <div class="lock-card">
         <div class="lock-icon">💊</div>
         <h2 id="lockTitle">صيدليتي</h2>
-        <p id="lockSub">أدخل كلمة المرور للدخول</p>
-        <input type="password" id="lockInput" inputmode="numeric" placeholder="••••" maxlength="12">
-        <input type="password" id="lockInputConfirm" placeholder="تأكيد كلمة المرور" class="hidden" maxlength="12">
+        <p id="lockSub">أدخل الاسم وكلمة المرور للدخول</p>
+        <input type="text" id="lockNameInput" placeholder="الاسم" style="letter-spacing:normal;font-size:15px;">
+        <input type="password" id="lockInput" inputmode="numeric" placeholder="الرمز ••••" maxlength="12">
+        <input type="password" id="lockInputConfirm" placeholder="تأكيد الرمز" class="hidden" maxlength="12">
         <div class="lock-error" id="lockError"></div>
         <button class="btn btn-primary" id="lockBtn" style="width:100%;justify-content:center;">دخول</button>
         <div id="lockBarcodeSection" class="hidden">
@@ -456,6 +457,15 @@
         <!-- ===================== التقارير ===================== -->
         <div id="section-reports" class="section hidden">
             <div class="card">
+                <div class="card-header"><h3>💰 الأرباح</h3></div>
+                <div class="stats-grid" id="profitStatsGrid">
+                    <div class="stat-card"><div class="icon">📅</div><div class="label">ربح اليوم</div><div class="number" id="profitToday">0</div><div class="sub">د.ع</div></div>
+                    <div class="stat-card"><div class="icon">📆</div><div class="label">ربح هذا الشهر</div><div class="number" id="profitMonth">0</div><div class="sub">د.ع</div></div>
+                    <div class="stat-card"><div class="icon">🗓️</div><div class="label">ربح هذه السنة</div><div class="number" id="profitYear">0</div><div class="sub">د.ع</div></div>
+                    <div class="stat-card"><div class="icon">📈</div><div class="label">إجمالي الأرباح (كل الفترات)</div><div class="number" id="profitAll">0</div><div class="sub">د.ع</div></div>
+                </div>
+            </div>
+            <div class="card">
                 <div class="card-header"><h3>📊 تقارير وطباعة</h3></div>
                 <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:18px;">
                     <button class="btn btn-primary" onclick="generateDailyReport()">📅 تقرير اليوم</button>
@@ -470,23 +480,27 @@
         <!-- ===================== الإعدادات ===================== -->
         <div id="section-settings" class="section hidden">
             <div class="card">
-                <div class="card-header"><h3>🔐 كلمة مرور التطبيق</h3></div>
+                <div class="card-header"><h3>👥 إدارة المستخدمين</h3></div>
+                <p style="color:var(--text-muted);font-size:13px;margin-bottom:14px;">كل مستخدم يدخل باسمه ورمزه الخاص. الأدمن يشوف كل الصفحات، الموظف العادي ما يشوف الإعدادات ولا يقدر يحذف مذاخر/مندوبين.</p>
                 <div class="form-grid">
-                    <div class="form-group"><label>كلمة المرور الجديدة</label><input type="password" id="newPin" maxlength="12"></div>
-                    <div class="form-group"><label>تأكيد كلمة المرور</label><input type="password" id="newPinConfirm" maxlength="12"></div>
+                    <div class="form-group"><label>الاسم</label><input type="text" id="empName"></div>
+                    <div class="form-group"><label>الرمز</label><input type="text" id="empCode" maxlength="12"></div>
+                    <div class="form-group">
+                        <label>الباركود (اختياري)</label>
+                        <div class="barcode-input-row">
+                            <input type="text" id="empBarcode" placeholder="امسح أو أدخل الكود">
+                            <button type="button" class="icon-btn" onclick="openBarcodeScanner('empBarcode')" title="مسح بالكاميرا">📷</button>
+                            <button type="button" class="icon-btn" onclick="document.getElementById('empBarcode').value = '3' + Date.now().toString().slice(-11);" title="توليد باركود">🔀</button>
+                        </div>
+                    </div>
+                    <div class="form-group checkbox-row"><input type="checkbox" id="empIsAdmin"><label style="padding:0;">صلاحية أدمن</label></div>
                 </div>
-                <button class="btn btn-primary" onclick="changePin()">💾 تحديث كلمة المرور</button>
-            </div>
-            <div class="card">
-                <div class="card-header"><h3>📷 باركود تسجيل الدخول (اختياري)</h3></div>
-                <p style="color:var(--text-muted);font-size:13px;margin-bottom:14px;">اطبع أي باركود (أو استخدم بطاقة موظف) وامسحه هنا. بعدها تكدر تدخل للتطبيق من شاشة القفل بمسح نفس الباركود بدل كتابة كلمة المرور.</p>
-                <div class="barcode-input-row" style="max-width:420px;">
-                    <input type="text" id="loginBarcodeInput" placeholder="امسح أو أدخل الكود">
-                    <button type="button" class="icon-btn" onclick="openBarcodeScanner('loginBarcodeInput')" title="مسح بالكاميرا">📷</button>
-                </div>
-                <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;">
-                    <button class="btn btn-primary" onclick="saveLoginBarcode()">💾 حفظ باركود الدخول</button>
-                    <button class="btn btn-danger" onclick="removeLoginBarcode()">🗑️ إلغاء باركود الدخول</button>
+                <button class="btn btn-primary" onclick="addEmployee()">➕ إضافة مستخدم</button>
+                <div class="table-wrap" style="margin-top:18px;">
+                    <table>
+                        <thead><tr><th>الاسم</th><th>الرمز</th><th>الباركود</th><th>الصلاحية</th><th>إجراء</th></tr></thead>
+                        <tbody id="employeesTable"></tbody>
+                    </table>
                 </div>
             </div>
             <div class="card">
@@ -528,6 +542,7 @@ let customers = JSON.parse(localStorage.getItem('sy_customers')) || [];
 let debtsData = JSON.parse(localStorage.getItem('sy_debts')) || [];
 let dailySalesData = JSON.parse(localStorage.getItem('sy_dailySales')) || [];
 let withdrawalsData = JSON.parse(localStorage.getItem('sy_withdrawals')) || [];
+let employees = JSON.parse(localStorage.getItem('sy_employees')) || [];
 
 let cart = [];
 let currentPosPaymentType = 'كاش';
@@ -539,6 +554,7 @@ function saveData() {
     localStorage.setItem('sy_debts', JSON.stringify(debtsData));
     localStorage.setItem('sy_dailySales', JSON.stringify(dailySalesData));
     localStorage.setItem('sy_withdrawals', JSON.stringify(withdrawalsData));
+    localStorage.setItem('sy_employees', JSON.stringify(employees));
 }
 
 // =========================== قفل التطبيق ===========================
@@ -548,30 +564,42 @@ function getTodayISO() {
 }
 
 const lockScreen = document.getElementById('lockScreen');
+const lockNameInput = document.getElementById('lockNameInput');
 const lockInput = document.getElementById('lockInput');
 const lockInputConfirm = document.getElementById('lockInputConfirm');
 const lockError = document.getElementById('lockError');
 const lockBtn = document.getElementById('lockBtn');
 const lockSub = document.getElementById('lockSub');
 
-function isFirstRun() { return !localStorage.getItem('sy_pin'); }
+function isFirstRun() { return employees.length === 0; }
+function currentEmployee() {
+    const id = sessionStorage.getItem('sy_currentEmployeeId');
+    return id ? employees.find(e => String(e.id) === id) || null : null;
+}
+function isAdmin() {
+    const emp = currentEmployee();
+    return !!emp && !!emp.isAdmin;
+}
+function findEmployeeByBarcode(code) {
+    return employees.find(e => e.barcode && e.barcode === code) || null;
+}
 
 function renderLockScreen() {
     if (isFirstRun()) {
-        lockSub.textContent = 'أول استخدام: عيّن كلمة مرور لحماية بيانات الصيدلية';
+        lockSub.textContent = 'أول استخدام: أنشئ حساب المدير (الأدمن)';
         lockInputConfirm.classList.remove('hidden');
-        lockInputConfirm.placeholder = 'تأكيد كلمة المرور';
-        lockBtn.textContent = 'تعيين كلمة المرور';
+        lockInputConfirm.placeholder = 'تأكيد الرمز';
+        lockBtn.textContent = 'إنشاء حساب المدير';
     } else {
-        lockSub.textContent = 'أدخل كلمة المرور للدخول';
+        lockSub.textContent = 'أدخل الاسم والرمز للدخول';
         lockInputConfirm.classList.add('hidden');
         lockBtn.textContent = 'دخول';
     }
-    lockInput.value = ''; lockInputConfirm.value = ''; lockError.textContent = '';
+    lockNameInput.value = ''; lockInput.value = ''; lockInputConfirm.value = ''; lockError.textContent = '';
     const barcodeSection = document.getElementById('lockBarcodeSection');
     const lockBarcodeInput = document.getElementById('lockBarcodeInput');
-    const hasLoginBarcode = !isFirstRun() && !!localStorage.getItem('sy_loginBarcode');
-    if (hasLoginBarcode) {
+    const hasAnyBarcode = !isFirstRun() && employees.some(e => e.barcode);
+    if (hasAnyBarcode) {
         barcodeSection.classList.remove('hidden');
         document.getElementById('phoneScanBtn').classList.toggle('hidden', !window.electronAPI);
     } else {
@@ -579,11 +607,11 @@ function renderLockScreen() {
     }
     if (lockBarcodeInput) lockBarcodeInput.value = '';
     // A USB/Bluetooth scanner just "types" into whatever field has focus, so
-    // when a login barcode is set up, default focus there instead of the
-    // password field - the pharmacist can scan immediately without clicking
-    // anything first. Typing the password is still one click away.
-    if (hasLoginBarcode) lockBarcodeInput.focus();
-    else lockInput.focus();
+    // when at least one employee has a login barcode, default focus there
+    // instead of the name field - whoever scans can log in immediately
+    // without clicking anything first. Typing name+code is still one click away.
+    if (hasAnyBarcode) lockBarcodeInput.focus();
+    else lockNameInput.focus();
 }
 function handleLockBarcodeKey(e) {
     if (e.key === 'Enter') { e.preventDefault(); checkLoginBarcode(); }
@@ -592,9 +620,9 @@ function checkLoginBarcode() {
     const el = document.getElementById('lockBarcodeInput');
     const val = el.value.trim();
     if (!val) return;
-    const stored = localStorage.getItem('sy_loginBarcode');
-    if (stored && val === stored) {
-        unlockApp();
+    const emp = findEmployeeByBarcode(val);
+    if (emp) {
+        unlockApp(emp.id);
     } else {
         lockError.textContent = 'باركود الدخول غير صحيح.';
         el.value = '';
@@ -636,59 +664,93 @@ if (window.electronAPI) {
 
 lockBtn.addEventListener('click', function() {
     if (isFirstRun()) {
+        const name = lockNameInput.value.trim();
         const p1 = lockInput.value.trim(), p2 = lockInputConfirm.value.trim();
-        if (p1.length < 4) { lockError.textContent = 'كلمة المرور يجب أن تكون 4 أحرف/أرقام على الأقل.'; return; }
-        if (p1 !== p2) { lockError.textContent = 'كلمتا المرور غير متطابقتين.'; return; }
-        localStorage.setItem('sy_pin', p1);
-        unlockApp();
+        if (!name) { lockError.textContent = 'أدخل اسم المدير.'; return; }
+        if (p1.length < 4) { lockError.textContent = 'الرمز يجب أن يكون 4 أحرف/أرقام على الأقل.'; return; }
+        if (p1 !== p2) { lockError.textContent = 'الرمزان غير متطابقين.'; return; }
+        const admin = { id: Date.now(), name, code: p1, barcode: '', isAdmin: true };
+        employees.push(admin);
+        saveData();
+        unlockApp(admin.id);
     } else {
-        if (lockInput.value === localStorage.getItem('sy_pin')) {
-            unlockApp();
+        const name = lockNameInput.value.trim();
+        const emp = employees.find(e => e.name === name && e.code === lockInput.value);
+        if (emp) {
+            unlockApp(emp.id);
         } else {
-            lockError.textContent = 'كلمة المرور غير صحيحة.';
+            lockError.textContent = 'الاسم أو الرمز غير صحيح.';
             lockInput.value = ''; lockInput.focus();
         }
     }
 });
-[lockInput, lockInputConfirm].forEach(el => el.addEventListener('keydown', e => { if (e.key === 'Enter') lockBtn.click(); }));
+[lockNameInput, lockInput, lockInputConfirm].forEach(el => el.addEventListener('keydown', e => { if (e.key === 'Enter') lockBtn.click(); }));
 
-function unlockApp() {
+function unlockApp(employeeId) {
     sessionStorage.setItem('sy_unlocked', '1');
+    if (employeeId !== undefined) sessionStorage.setItem('sy_currentEmployeeId', String(employeeId));
     lockScreen.style.display = 'none';
     document.getElementById('appContainer').classList.add('active');
     initApp();
 }
 function lockApp() {
     sessionStorage.removeItem('sy_unlocked');
+    sessionStorage.removeItem('sy_currentEmployeeId');
     location.reload();
 }
 
-function changePin() {
-    const p1 = document.getElementById('newPin').value.trim();
-    const p2 = document.getElementById('newPinConfirm').value.trim();
-    if (p1.length < 4) return alert('كلمة المرور يجب أن تكون 4 أحرف/أرقام على الأقل.');
-    if (p1 !== p2) return alert('كلمتا المرور غير متطابقتين.');
-    localStorage.setItem('sy_pin', p1);
-    document.getElementById('newPin').value = '';
-    document.getElementById('newPinConfirm').value = '';
-    alert('✅ تم تحديث كلمة المرور.');
-}
-function saveLoginBarcode() {
-    const val = document.getElementById('loginBarcodeInput').value.trim();
-    if (!val) return alert('أدخل أو امسح باركود أولاً.');
-    localStorage.setItem('sy_loginBarcode', val);
-    alert('✅ تم حفظ باركود الدخول. تكدر تستخدمه بشاشة القفل بدل كلمة المرور.');
-}
-function removeLoginBarcode() {
-    localStorage.removeItem('sy_loginBarcode');
-    document.getElementById('loginBarcodeInput').value = '';
-    alert('تم إلغاء باركود الدخول.');
-}
-
-if (sessionStorage.getItem('sy_unlocked') === '1' && !isFirstRun()) {
+if (sessionStorage.getItem('sy_unlocked') === '1' && !isFirstRun() && currentEmployee()) {
     unlockApp();
 } else {
     renderLockScreen();
+}
+
+// =========================== المستخدمين ===========================
+function addEmployee() {
+    const name = document.getElementById('empName').value.trim();
+    const code = document.getElementById('empCode').value.trim();
+    const barcode = document.getElementById('empBarcode').value.trim();
+    const isAdminChecked = document.getElementById('empIsAdmin').checked;
+    if (!name || !code) return alert('الاسم والرمز مطلوبان.');
+    if (employees.some(e => e.name === name)) return alert('يوجد مستخدم بهذا الاسم مسبقاً.');
+    if (barcode && employees.some(e => e.barcode === barcode)) return alert('هذا الباركود مستخدم لمستخدم آخر مسبقاً.');
+    employees.push({ id: Date.now(), name, code, barcode, isAdmin: isAdminChecked });
+    saveData();
+    document.getElementById('empName').value = '';
+    document.getElementById('empCode').value = '';
+    document.getElementById('empBarcode').value = '';
+    document.getElementById('empIsAdmin').checked = false;
+    renderEmployees();
+    renderLockScreen();
+}
+function deleteEmployee(id) {
+    if (employees.length <= 1) return alert('لازم يبقى مستخدم واحد على الأقل.');
+    const emp = employees.find(e => e.id === id);
+    if (emp && String(emp.id) === sessionStorage.getItem('sy_currentEmployeeId')) {
+        return alert('ما تكدر تحذف حسابك وانت داخل بيه.');
+    }
+    if (confirm('حذف هذا المستخدم؟')) {
+        employees = employees.filter(e => e.id !== id);
+        saveData();
+        renderEmployees();
+        renderLockScreen();
+    }
+}
+function renderEmployees() {
+    const tbody = document.getElementById('employeesTable');
+    if (!tbody) return;
+    tbody.innerHTML = employees.map(e => `
+        <tr><td>${e.name}</td><td>${e.code}</td><td>${e.barcode ? `<span class="barcode-text">${e.barcode}</span>` : '-'}</td>
+        <td>${e.isAdmin ? '<span class="rx-badge" style="background:var(--primary-light);">أدمن</span>' : 'موظف'}</td>
+        <td><button class="btn btn-danger btn-sm" onclick="deleteEmployee(${e.id})">حذف</button></td></tr>
+    `).join('') || '<tr><td colspan="5" style="text-align:center;color:#999;">لا يوجد مستخدمون</td></tr>';
+}
+function applyRolePermissions() {
+    const admin = isAdmin();
+    document.querySelectorAll('#mainMenu li[data-tab="settings"]').forEach(li => li.classList.toggle('hidden', !admin));
+    const emp = currentEmployee();
+    const userRow = document.querySelector('.sidebar .user-area .user-row span:last-child');
+    if (userRow && emp) userRow.textContent = `${emp.name}${admin ? ' (أدمن)' : ''}`;
 }
 
 // =========================== تبديل الأقسام ===========================
@@ -705,7 +767,8 @@ document.querySelectorAll('#mainMenu li').forEach(item => {
         if (tab === 'customers') renderCustomers();
         if (tab === 'sales') renderPOS();
         if (tab === 'debts') renderDebts();
-        if (tab === 'settings') { renderDailyArchive(); document.getElementById('loginBarcodeInput').value = localStorage.getItem('sy_loginBarcode') || ''; }
+        if (tab === 'reports') renderProfitStats();
+        if (tab === 'settings') { renderDailyArchive(); renderEmployees(); }
     });
 });
 
@@ -828,7 +891,7 @@ async function openBarcodeScanner(targetInputId) {
                     const val = codes[0].rawValue;
                     document.getElementById(barcodeScanTarget).value = val;
                     closeBarcodeScanner();
-                    if (barcodeScanTarget === 'invBarcode' || barcodeScanTarget === 'loginBarcodeInput') return;
+                    if (barcodeScanTarget === 'invBarcode' || barcodeScanTarget === 'empBarcode') return;
                     tryBarcodeAutoAdd(barcodeScanTarget);
                 } else {
                     barcodeRAF = requestAnimationFrame(loop);
@@ -873,6 +936,7 @@ function expiryLabel(item) {
 // =========================== تهيئة التطبيق ===========================
 function initApp() {
     document.getElementById('dateBadge').textContent = '📅 ' + new Date().toLocaleDateString('ar');
+    applyRolePermissions();
     updateDashboard();
     renderInventory();
     renderWithdrawals();
@@ -1243,6 +1307,26 @@ function renderDailyArchive() {
     entries.forEach(([date, g]) => {
         tbody.innerHTML += `<tr><td>${date}</td><td>${g.count}</td><td>${g.total.toLocaleString()}</td><td>${g.profit.toLocaleString()}</td></tr>`;
     });
+}
+
+// =========================== الأرباح ===========================
+function renderProfitStats() {
+    const today = new Date().toLocaleDateString();
+    const now = new Date();
+    let profitToday = 0, profitMonth = 0, profitYear = 0, profitAll = 0;
+    dailySalesData.forEach(t => {
+        profitAll += t.profitAmount;
+        if (t.date === today) profitToday += t.profitAmount;
+        const d = new Date(t.date);
+        if (d.getFullYear() === now.getFullYear()) {
+            profitYear += t.profitAmount;
+            if (d.getMonth() === now.getMonth()) profitMonth += t.profitAmount;
+        }
+    });
+    document.getElementById('profitToday').textContent = profitToday.toLocaleString();
+    document.getElementById('profitMonth').textContent = profitMonth.toLocaleString();
+    document.getElementById('profitYear').textContent = profitYear.toLocaleString();
+    document.getElementById('profitAll').textContent = profitAll.toLocaleString();
 }
 
 // =========================== التقارير والطباعة ===========================
