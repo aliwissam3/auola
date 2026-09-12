@@ -282,6 +282,7 @@
             <li data-tab="debts"><i>💰</i> <span>الديون</span></li>
             <li data-tab="suppliers"><i>🏭</i> <span>المذاخر والمندوبين</span></li>
             <li data-tab="log"><i>📜</i> <span>السجل</span></li>
+            <li data-tab="expenses"><i>💵</i> <span>المصاريف</span></li>
             <li data-tab="reports"><i>📈</i> <span>التقارير</span></li>
             <li data-tab="settings"><i>⚙️</i> <span>الإعدادات</span></li>
         </ul>
@@ -643,6 +644,37 @@
             </div>
         </div>
 
+        <!-- ===================== المصاريف ===================== -->
+        <div id="section-expenses" class="section hidden">
+            <div class="card">
+                <div class="card-header"><h3>💵 تسجيل مصروف</h3></div>
+                <div class="form-grid">
+                    <div class="form-group"><label>العنوان</label><input type="text" id="expTitle" placeholder="مثال: إيجار، كهرباء، رواتب..."></div>
+                    <div class="form-group"><label>المبلغ</label><input type="number" id="expAmount" min="0"></div>
+                    <div class="form-group"><label>النوع</label>
+                        <select id="expType">
+                            <option value="ثابت">مصروف ثابت</option>
+                            <option value="متغير">مصروف متغير</option>
+                        </select>
+                    </div>
+                    <div class="form-group"><label>ملاحظة</label><input type="text" id="expNote"></div>
+                </div>
+                <button class="btn btn-primary" onclick="addExpense()">➕ تسجيل المصروف</button>
+                <div class="stats-grid" style="margin-top:18px;">
+                    <div class="stat-card"><div class="icon">📅</div><div class="label">مصاريف اليوم</div><div class="number" id="expToday">0</div><div class="sub">د.ع</div></div>
+                    <div class="stat-card"><div class="icon">📆</div><div class="label">مصاريف هذا الشهر</div><div class="number" id="expMonth">0</div><div class="sub">د.ع</div></div>
+                    <div class="stat-card"><div class="icon">🏠</div><div class="label">إجمالي الثابتة</div><div class="number" id="expFixedTotal">0</div><div class="sub">د.ع</div></div>
+                    <div class="stat-card"><div class="icon">📊</div><div class="label">إجمالي المتغيرة</div><div class="number" id="expVariableTotal">0</div><div class="sub">د.ع</div></div>
+                </div>
+                <div class="table-wrap" style="margin-top:18px;">
+                    <table>
+                        <thead><tr><th>التاريخ</th><th>العنوان</th><th>النوع</th><th>المبلغ</th><th>ملاحظة</th><th>إجراء</th></tr></thead>
+                        <tbody id="expensesTable"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
         <!-- ===================== التقارير ===================== -->
         <div id="section-reports" class="section hidden">
             <div class="card">
@@ -758,6 +790,7 @@ let supplierPaymentsData = JSON.parse(localStorage.getItem('sy_supplierPayments'
 let supplierReturnsData = JSON.parse(localStorage.getItem('sy_supplierReturns')) || [];
 let customerReturnsData = JSON.parse(localStorage.getItem('sy_customerReturns')) || [];
 let appProfile = JSON.parse(localStorage.getItem('sy_profile')) || {};
+let expensesData = JSON.parse(localStorage.getItem('sy_expenses')) || [];
 
 const RENEWAL_BARCODE = 'SY-RENEW-UNIVERSAL';
 const SUBSCRIPTION_TRIAL_DAYS = 30;
@@ -781,6 +814,7 @@ function saveData() {
     localStorage.setItem('sy_supplierReturns', JSON.stringify(supplierReturnsData));
     localStorage.setItem('sy_customerReturns', JSON.stringify(customerReturnsData));
     localStorage.setItem('sy_profile', JSON.stringify(appProfile));
+    localStorage.setItem('sy_expenses', JSON.stringify(expensesData));
 }
 function isoDatePlusDays(date, days) {
     const d = new Date(date);
@@ -838,6 +872,49 @@ function saveProfile() {
     appProfile.ownerName = document.getElementById('profileOwnerName').value.trim();
     saveData();
     alert('✅ تم الحفظ.');
+}
+
+// =========================== المصاريف ===========================
+function addExpense() {
+    const title = document.getElementById('expTitle').value.trim();
+    const amount = parseFloat(document.getElementById('expAmount').value);
+    const type = document.getElementById('expType').value;
+    const note = document.getElementById('expNote').value.trim();
+    if (!title || isNaN(amount) || amount <= 0) return alert('يرجى إدخال العنوان والمبلغ بشكل صحيح.');
+    expensesData.push({ id: Date.now(), date: getTodayISO(), title, amount, type, note });
+    saveData();
+    document.getElementById('expTitle').value = '';
+    document.getElementById('expAmount').value = '';
+    document.getElementById('expNote').value = '';
+    renderExpenses();
+}
+function deleteExpense(id) {
+    if (confirm('حذف هذا المصروف؟')) {
+        expensesData = expensesData.filter(e => e.id !== id);
+        saveData();
+        renderExpenses();
+    }
+}
+function renderExpenses() {
+    const tbody = document.getElementById('expensesTable');
+    if (!tbody) return;
+    const today = getTodayISO();
+    const now = new Date();
+    let todayTotal = 0, monthTotal = 0, fixedTotal = 0, variableTotal = 0;
+    expensesData.forEach(e => {
+        if (e.date === today) todayTotal += e.amount;
+        const d = new Date(e.date);
+        if (d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()) monthTotal += e.amount;
+        if (e.type === 'ثابت') fixedTotal += e.amount; else variableTotal += e.amount;
+    });
+    document.getElementById('expToday').textContent = todayTotal.toLocaleString();
+    document.getElementById('expMonth').textContent = monthTotal.toLocaleString();
+    document.getElementById('expFixedTotal').textContent = fixedTotal.toLocaleString();
+    document.getElementById('expVariableTotal').textContent = variableTotal.toLocaleString();
+    tbody.innerHTML = expensesData.slice().reverse().map(e =>
+        `<tr><td>${e.date}</td><td>${e.title}</td><td>${e.type}</td><td>${e.amount.toLocaleString()}</td><td>${e.note || '-'}</td>
+        <td><button class="btn btn-danger btn-sm" onclick="deleteExpense(${e.id})">حذف</button></td></tr>`
+    ).join('') || '<tr><td colspan="6" style="text-align:center;color:#999;">لا توجد مصاريف مسجلة</td></tr>';
 }
 function supplierBalance(supplierId) {
     const purchased = purchasesData.filter(p => p.supplierId === supplierId).reduce((s, p) => s + p.total, 0);
@@ -1298,6 +1375,7 @@ document.querySelectorAll('#mainMenu li').forEach(item => {
         if (tab === 'debts') renderDebts();
         if (tab === 'suppliers') { renderSuppliers(); renderReps(); renderPurchases(); renderSupplierPayments(); renderSupplierReturns(); }
         if (tab === 'log') renderInvoiceLog();
+        if (tab === 'expenses') renderExpenses();
         if (tab === 'reports') renderProfitStats();
         if (tab === 'settings') { renderDailyArchive(); renderEmployees(); renderProfile(); }
     });
