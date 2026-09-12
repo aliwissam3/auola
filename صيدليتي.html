@@ -542,6 +542,25 @@
             </div>
 
             <div class="card">
+                <div class="card-header"><h3>💵 تسديد المذخر</h3></div>
+                <p style="color:var(--text-muted);font-size:13px;margin-bottom:14px;">تسديدات المذاخر منفصلة عن تسديدات الديون/الزبائن (تلك في تبويب الديون). فعّل "دفعة خارجية" إذا كان المبلغ مدفوعاً من خارج قاصة المحل ولا تريد احتسابه ضمن تقارير المصاريف.</p>
+                <div class="form-grid">
+                    <div class="form-group"><label>المذخر</label><select id="paySupplierId" onchange="updateSupplierPayPreview()"></select></div>
+                    <div class="form-group"><label>المبلغ المدفوع نقداً</label><input type="number" id="paySupplierAmount" min="0" oninput="updateSupplierPayPreview()"></div>
+                    <div class="form-group"><label>نسبة خصم (%)</label><input type="number" id="paySupplierDiscountPct" min="0" max="100" oninput="updateSupplierPayPreview()"></div>
+                    <div class="form-group checkbox-row"><input type="checkbox" id="paySupplierExternal"><label style="padding:0;">دفعة خارجية (تُستثنى من تقارير المصاريف)</label></div>
+                </div>
+                <div class="scan-hint" id="supplierPayPreview"></div>
+                <button class="btn btn-success" style="margin-top:10px;" onclick="paySupplier()">💾 تسجيل التسديد</button>
+                <div class="table-wrap" style="margin-top:18px;">
+                    <table>
+                        <thead><tr><th>التاريخ</th><th>المذخر</th><th>المدفوع</th><th>الخصم</th><th>دفعة خارجية</th></tr></thead>
+                        <tbody id="supplierPaymentsTable"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card">
                 <div class="card-header"><h3>📋 سجل المشتريات</h3></div>
                 <div class="table-wrap">
                     <table>
@@ -685,7 +704,7 @@ function saveData() {
 }
 function supplierBalance(supplierId) {
     const purchased = purchasesData.filter(p => p.supplierId === supplierId).reduce((s, p) => s + p.total, 0);
-    const paid = supplierPaymentsData.filter(p => p.supplierId === supplierId).reduce((s, p) => s + p.amount, 0);
+    const paid = supplierPaymentsData.filter(p => p.supplierId === supplierId).reduce((s, p) => s + p.amount + p.discountAmount, 0);
     return purchased - paid;
 }
 
@@ -919,14 +938,16 @@ function renderSuppliers() {
     `).join('') || '<tr><td colspan="4" style="text-align:center;color:#999;">لا يوجد مذاخر</td></tr>';
     const purSel = document.getElementById('purSupplierId');
     const repSel = document.getElementById('repSupplierId');
-    [purSel, repSel].forEach(sel => {
+    const paySel = document.getElementById('paySupplierId');
+    [purSel, repSel, paySel].forEach(sel => {
         if (!sel) return;
         const keepEmpty = sel.id === 'repSupplierId';
         const current = sel.value;
         sel.innerHTML = (keepEmpty ? '<option value="">— بدون —</option>' : '') +
-            suppliers.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+            suppliers.map(s => `<option value="${s.id}">${s.name} (المتبقي: ${supplierBalance(s.id).toLocaleString()})</option>`).join('');
         sel.value = current;
     });
+    updateSupplierPayPreview();
 }
 
 function addRep() {
@@ -1041,6 +1062,46 @@ function renderPurchases() {
     }).join('') || '<tr><td colspan="5" style="text-align:center;color:#999;">لا توجد مشتريات مسجلة</td></tr>';
 }
 
+function updateSupplierPayPreview() {
+    const preview = document.getElementById('supplierPayPreview');
+    if (!preview) return;
+    const supplierId = document.getElementById('paySupplierId').value ? Number(document.getElementById('paySupplierId').value) : '';
+    if (!supplierId) { preview.textContent = ''; return; }
+    const balance = supplierBalance(supplierId);
+    const amount = parseFloat(document.getElementById('paySupplierAmount').value) || 0;
+    const pct = parseFloat(document.getElementById('paySupplierDiscountPct').value) || 0;
+    const discountAmount = balance * (pct / 100);
+    const after = balance - amount - discountAmount;
+    preview.textContent = `الرصيد الحالي: ${balance.toLocaleString()} د.ع — قيمة الخصم: ${discountAmount.toLocaleString()} د.ع — الرصيد بعد التسديد: ${after.toLocaleString()} د.ع`;
+}
+function paySupplier() {
+    const supplierId = document.getElementById('paySupplierId').value ? Number(document.getElementById('paySupplierId').value) : '';
+    if (!supplierId) return alert('يرجى اختيار المذخر.');
+    const amount = parseFloat(document.getElementById('paySupplierAmount').value) || 0;
+    const pct = parseFloat(document.getElementById('paySupplierDiscountPct').value) || 0;
+    const external = document.getElementById('paySupplierExternal').checked;
+    if (amount <= 0 && pct <= 0) return alert('أدخل مبلغاً أو نسبة خصم أكبر من صفر.');
+    const balance = supplierBalance(supplierId);
+    const discountAmount = balance * (pct / 100);
+    supplierPaymentsData.push({ id: Date.now(), date: getTodayISO(), supplierId, amount, discountAmount, external });
+    saveData();
+    document.getElementById('paySupplierAmount').value = '';
+    document.getElementById('paySupplierDiscountPct').value = '';
+    document.getElementById('paySupplierExternal').checked = false;
+    renderSuppliers();
+    renderSupplierPayments();
+    alert('✅ تم تسجيل التسديد.');
+}
+function renderSupplierPayments() {
+    const tbody = document.getElementById('supplierPaymentsTable');
+    if (!tbody) return;
+    tbody.innerHTML = supplierPaymentsData.slice().reverse().map(p => {
+        const sup = suppliers.find(s => s.id === p.supplierId);
+        return `<tr><td>${p.date}</td><td>${sup ? sup.name : '-'}</td><td>${p.amount.toLocaleString()}</td>
+        <td>${p.discountAmount.toLocaleString()}</td><td>${p.external ? 'نعم' : '-'}</td></tr>`;
+    }).join('') || '<tr><td colspan="5" style="text-align:center;color:#999;">لا توجد تسديدات مسجلة</td></tr>';
+}
+
 // =========================== تبديل الأقسام ===========================
 document.querySelectorAll('#mainMenu li').forEach(item => {
     item.addEventListener('click', function() {
@@ -1055,7 +1116,7 @@ document.querySelectorAll('#mainMenu li').forEach(item => {
         if (tab === 'customers') renderCustomers();
         if (tab === 'sales') renderPOS();
         if (tab === 'debts') renderDebts();
-        if (tab === 'suppliers') { renderSuppliers(); renderReps(); renderPurchases(); }
+        if (tab === 'suppliers') { renderSuppliers(); renderReps(); renderPurchases(); renderSupplierPayments(); }
         if (tab === 'log') renderInvoiceLog();
         if (tab === 'reports') renderProfitStats();
         if (tab === 'settings') { renderDailyArchive(); renderEmployees(); }
