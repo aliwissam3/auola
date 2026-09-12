@@ -205,6 +205,20 @@
     </div>
 </div>
 
+<!-- ===================== نافذة تبديل دواء في الدين ===================== -->
+<div id="swapMedModal" class="hidden">
+    <div class="modal-box">
+        <h3 style="margin-bottom:10px;">🔄 تبديل دواء في الدين</h3>
+        <div class="form-group"><label>المادة الحالية</label><select id="swapOldItem" onchange="updateSwapDiffPreview()"></select></div>
+        <div class="form-group"><label>المادة البديلة</label><select id="swapNewItem" onchange="updateSwapDiffPreview()"></select></div>
+        <div class="scan-hint" id="swapDiffPreview"></div>
+        <div style="display:flex;gap:10px;margin-top:10px;">
+            <button class="btn btn-primary" style="flex:1;" onclick="confirmSwapMedicine()">تأكيد التبديل</button>
+            <button class="btn btn-danger" style="flex:1;" onclick="closeSwapMedModal()">إلغاء</button>
+        </div>
+    </div>
+</div>
+
 <!-- ===================== شاشة القفل ===================== -->
 <div id="lockScreen">
     <div class="lock-card">
@@ -1468,7 +1482,8 @@ function checkoutPOS() {
         });
         debtsData.push({
             id: Date.now(), date, customer, phone, dueDate: dueDate || 'غير محدد', note,
-            desc, total, remaining: total, paid: 0, totalProfit: profit
+            desc, total, remaining: total, paid: 0, totalProfit: profit,
+            items: cart.map(i => ({ id: i.id, name: i.name, sell: i.sell, qty: i.qty }))
         });
         saveData();
         cart = [];
@@ -1504,6 +1519,7 @@ function renderDebts() {
         return `<tr${isDue ? ' style="background:#fff6e5;"' : ''}><td>${d.date}</td><td>${d.customer}</td><td>${d.phone||'-'}</td>
         <td>${d.desc}</td><td>${d.total.toLocaleString()}</td><td>${d.remaining.toLocaleString()}</td>
         <td><button class="btn btn-success btn-sm" onclick="payDebtAmount(${idx})">تسديد</button>
+        ${d.items && d.items.length ? `<button class="btn btn-warning btn-sm" onclick="openSwapMedModal(${idx})">🔄 تبديل</button>` : ''}
         <button class="btn btn-danger btn-sm" onclick="deleteDebtRecord(${idx})">حذف</button></td></tr>`;
     }).join('') || '<tr><td colspan="7" style="text-align:center;color:#999;">لا توجد ديون</td></tr>';
 }
@@ -1534,6 +1550,72 @@ function deleteDebtRecord(idx) {
         updateDashboard();
         renderNotifications();
     }
+}
+
+// =========================== تبديل دواء في الدين ===========================
+let swapDebtIdx = null;
+function openSwapMedModal(idx) {
+    const debt = debtsData[idx];
+    if (!debt.items || !debt.items.length) return alert('هذا الدين قديم ولا يحتوي تفاصيل المواد، لا يمكن التبديل.');
+    swapDebtIdx = idx;
+    const oldSel = document.getElementById('swapOldItem');
+    oldSel.innerHTML = debt.items.map((it, i) => `<option value="${i}">${it.name} (${it.qty} × ${it.sell.toLocaleString()})</option>`).join('');
+    const newSel = document.getElementById('swapNewItem');
+    newSel.innerHTML = inventoryData.map(p => `<option value="${p.id}">${p.name} (${p.sell.toLocaleString()} د.ع، متوفر ${p.qty})</option>`).join('');
+    updateSwapDiffPreview();
+    document.getElementById('swapMedModal').classList.remove('hidden');
+}
+function closeSwapMedModal() {
+    document.getElementById('swapMedModal').classList.add('hidden');
+    swapDebtIdx = null;
+}
+function updateSwapDiffPreview() {
+    if (swapDebtIdx === null) return;
+    const debt = debtsData[swapDebtIdx];
+    const oldIdx = parseInt(document.getElementById('swapOldItem').value);
+    const newId = parseInt(document.getElementById('swapNewItem').value);
+    const oldItem = debt.items[oldIdx];
+    const newProd = inventoryData.find(p => p.id === newId);
+    const preview = document.getElementById('swapDiffPreview');
+    if (!oldItem || !newProd) { preview.textContent = ''; return; }
+    const diff = (newProd.sell - oldItem.sell) * oldItem.qty;
+    if (diff > 0) preview.textContent = `⬆️ الفرق سيُضاف للدين: ${diff.toLocaleString()} د.ع`;
+    else if (diff < 0) preview.textContent = `⬇️ الفرق سيُخصم من الدين: ${Math.abs(diff).toLocaleString()} د.ع`;
+    else preview.textContent = 'نفس السعر، لا يوجد فرق.';
+}
+function confirmSwapMedicine() {
+    if (swapDebtIdx === null) return;
+    const debt = debtsData[swapDebtIdx];
+    const oldIdx = parseInt(document.getElementById('swapOldItem').value);
+    const newId = parseInt(document.getElementById('swapNewItem').value);
+    const oldItem = debt.items[oldIdx];
+    const newProd = inventoryData.find(p => p.id === newId);
+    if (!oldItem || !newProd) return;
+    if (oldItem.id === newProd.id) return alert('اختر مادة بديلة مختلفة عن المادة الحالية.');
+    if (newProd.qty < oldItem.qty) return alert(`الكمية المتوفرة من (${newProd.name}) غير كافية (متوفر ${newProd.qty}).`);
+
+    const oldProd = inventoryData.find(p => p.id === oldItem.id);
+    if (oldProd) oldProd.qty += oldItem.qty;
+    newProd.qty -= oldItem.qty;
+
+    const diff = (newProd.sell - oldItem.sell) * oldItem.qty;
+    debt.total += diff;
+    debt.remaining = Math.max(0, Math.min(debt.total - debt.paid, debt.remaining + diff));
+    debt.items[oldIdx] = { id: newProd.id, name: newProd.name, sell: newProd.sell, qty: oldItem.qty };
+    debt.desc = debt.items.map(i => `${i.name} x${i.qty}`).join(', ');
+
+    saveData();
+    closeSwapMedModal();
+    renderDebts();
+    renderInventory();
+    renderPOS();
+    updateDashboard();
+    if (debt.remaining === 0 && debt.total <= debt.paid) {
+        debtsData.splice(swapDebtIdx, 1);
+        saveData();
+        renderDebts();
+    }
+    alert('✅ تم تبديل الدواء وتحديث الدين.');
 }
 
 // =========================== الأرشيف / سجل المبيعات ===========================
