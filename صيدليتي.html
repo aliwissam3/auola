@@ -336,6 +336,7 @@
         <div id="section-sales" class="section hidden">
             <div class="card">
                 <div class="card-header"><h3>🛒 بيع سريع</h3></div>
+                <div id="posShortcutsRow" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;"></div>
                 <div class="search-bar">
                     <input type="text" id="posSearch" placeholder="ابحث بالاسم أو امسح الباركود..." oninput="renderPOS()" onkeydown="handleScanKey(event,'posSearch')">
                     <button class="scan-btn" onclick="openBarcodeScanner('posSearch')" title="مسح بالكاميرا">📷</button>
@@ -744,6 +745,20 @@
                 </div>
             </div>
             <div class="card">
+                <div class="card-header"><h3>⚡ اختصارات المنتجات (بيع سريع)</h3></div>
+                <p style="color:var(--text-muted);font-size:13px;margin-bottom:14px;">أضف المنتجات الأكثر بيعاً كاختصارات تظهر كأزرار سريعة أعلى شاشة البيع.</p>
+                <div class="form-grid">
+                    <div class="form-group"><label>المنتج</label><select id="shortcutItemId"></select></div>
+                </div>
+                <button class="btn btn-primary" onclick="addShortcut()">➕ إضافة كاختصار</button>
+                <div class="table-wrap" style="margin-top:18px;">
+                    <table>
+                        <thead><tr><th>المنتج</th><th>إجراء</th></tr></thead>
+                        <tbody id="shortcutsSettingsTable"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="card">
                 <div class="card-header"><h3>🗄️ سجل المبيعات حسب اليوم</h3></div>
                 <div class="table-wrap">
                     <table>
@@ -791,6 +806,7 @@ let supplierReturnsData = JSON.parse(localStorage.getItem('sy_supplierReturns'))
 let customerReturnsData = JSON.parse(localStorage.getItem('sy_customerReturns')) || [];
 let appProfile = JSON.parse(localStorage.getItem('sy_profile')) || {};
 let expensesData = JSON.parse(localStorage.getItem('sy_expenses')) || [];
+let shortcutsData = JSON.parse(localStorage.getItem('sy_shortcuts')) || [];
 
 const RENEWAL_BARCODE = 'SY-RENEW-UNIVERSAL';
 const SUBSCRIPTION_TRIAL_DAYS = 30;
@@ -815,6 +831,7 @@ function saveData() {
     localStorage.setItem('sy_customerReturns', JSON.stringify(customerReturnsData));
     localStorage.setItem('sy_profile', JSON.stringify(appProfile));
     localStorage.setItem('sy_expenses', JSON.stringify(expensesData));
+    localStorage.setItem('sy_shortcuts', JSON.stringify(shortcutsData));
 }
 function isoDatePlusDays(date, days) {
     const d = new Date(date);
@@ -915,6 +932,45 @@ function renderExpenses() {
         `<tr><td>${e.date}</td><td>${e.title}</td><td>${e.type}</td><td>${e.amount.toLocaleString()}</td><td>${e.note || '-'}</td>
         <td><button class="btn btn-danger btn-sm" onclick="deleteExpense(${e.id})">حذف</button></td></tr>`
     ).join('') || '<tr><td colspan="6" style="text-align:center;color:#999;">لا توجد مصاريف مسجلة</td></tr>';
+}
+
+// =========================== اختصارات المنتجات ===========================
+function addShortcut() {
+    const itemId = document.getElementById('shortcutItemId').value ? Number(document.getElementById('shortcutItemId').value) : '';
+    if (!itemId) return alert('يرجى اختيار منتج.');
+    if (shortcutsData.includes(itemId)) return alert('هذا المنتج مضاف كاختصار مسبقاً.');
+    shortcutsData.push(itemId);
+    saveData();
+    renderShortcutsSettings();
+    renderPosShortcuts();
+}
+function removeShortcut(itemId) {
+    shortcutsData = shortcutsData.filter(id => id !== itemId);
+    saveData();
+    renderShortcutsSettings();
+    renderPosShortcuts();
+}
+function renderShortcutsSettings() {
+    const sel = document.getElementById('shortcutItemId');
+    if (!sel) return;
+    const current = sel.value;
+    sel.innerHTML = inventoryData.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+    sel.value = current;
+    const tbody = document.getElementById('shortcutsSettingsTable');
+    tbody.innerHTML = shortcutsData.map(id => {
+        const p = inventoryData.find(pr => pr.id === id);
+        if (!p) return '';
+        return `<tr><td>${p.name}</td><td><button class="btn btn-danger btn-sm" onclick="removeShortcut(${id})">إزالة</button></td></tr>`;
+    }).join('') || '<tr><td colspan="2" style="text-align:center;color:#999;">لا توجد اختصارات</td></tr>';
+}
+function renderPosShortcuts() {
+    const row = document.getElementById('posShortcutsRow');
+    if (!row) return;
+    row.innerHTML = shortcutsData.map(id => {
+        const p = inventoryData.find(pr => pr.id === id);
+        if (!p) return '';
+        return `<button class="btn btn-warning btn-sm" onclick="addToCart(${id})">⚡ ${p.name}</button>`;
+    }).join('');
 }
 function supplierBalance(supplierId) {
     const purchased = purchasesData.filter(p => p.supplierId === supplierId).reduce((s, p) => s + p.total, 0);
@@ -1377,7 +1433,7 @@ document.querySelectorAll('#mainMenu li').forEach(item => {
         if (tab === 'log') renderInvoiceLog();
         if (tab === 'expenses') renderExpenses();
         if (tab === 'reports') renderProfitStats();
-        if (tab === 'settings') { renderDailyArchive(); renderEmployees(); renderProfile(); }
+        if (tab === 'settings') { renderDailyArchive(); renderEmployees(); renderProfile(); renderShortcutsSettings(); }
     });
 });
 
@@ -1823,6 +1879,7 @@ function renderPOS() {
         returnSel.value = current;
     }
     renderCustomerReturns();
+    renderPosShortcuts();
 }
 function returnFromCustomer() {
     const itemId = document.getElementById('custReturnItemId').value ? Number(document.getElementById('custReturnItemId').value) : '';
