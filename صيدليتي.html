@@ -229,6 +229,22 @@
 </div>
 
 <!-- ===================== شاشة القفل ===================== -->
+<!-- ===================== شاشة انتهاء الاشتراك ===================== -->
+<div id="subscriptionLockScreen" class="hidden">
+    <div class="lock-card">
+        <div class="lock-icon">⛔</div>
+        <h2>انتهى الاشتراك</h2>
+        <p id="subLockSub">انتهت مدة اشتراك هذا التطبيق. أدخل كود التجديد للمتابعة.</p>
+        <div class="barcode-input-row">
+            <input type="text" id="subRenewInput" placeholder="كود التجديد" onkeydown="if(event.key==='Enter') applyRenewalCode(document.getElementById('subRenewInput').value)">
+            <button type="button" class="icon-btn" onclick="openBarcodeScanner('subRenewInput')" title="مسح بالكاميرا">📷</button>
+        </div>
+        <div class="lock-error" id="subLockError"></div>
+        <button class="btn btn-primary" style="width:100%;justify-content:center;" onclick="applyRenewalCode(document.getElementById('subRenewInput').value)">تجديد الاشتراك</button>
+        <div class="lock-hint">للحصول على كود التجديد تواصل مع مزوّد التطبيق.</div>
+    </div>
+</div>
+
 <div id="lockScreen">
     <div class="lock-card">
         <div class="lock-icon">💊</div>
@@ -653,6 +669,25 @@
         <!-- ===================== الإعدادات ===================== -->
         <div id="section-settings" class="section hidden">
             <div class="card">
+                <div class="card-header"><h3>👤 الملف الشخصي والاشتراك</h3></div>
+                <div class="form-grid">
+                    <div class="form-group"><label>اسم الصيدلية</label><input type="text" id="profilePharmacyName"></div>
+                    <div class="form-group"><label>اسم المالك</label><input type="text" id="profileOwnerName"></div>
+                </div>
+                <button class="btn btn-primary" onclick="saveProfile()">💾 حفظ</button>
+                <hr style="margin:18px 0;">
+                <div id="profileSubInfo" style="font-weight:bold;margin-bottom:12px;"></div>
+                <div class="form-grid">
+                    <div class="form-group"><label>كود تجديد الاشتراك</label>
+                        <div class="barcode-input-row">
+                            <input type="text" id="profileRenewInput">
+                            <button type="button" class="icon-btn" onclick="openBarcodeScanner('profileRenewInput')" title="مسح بالكاميرا">📷</button>
+                        </div>
+                    </div>
+                </div>
+                <button class="btn btn-success" onclick="applyRenewalCode(document.getElementById('profileRenewInput').value)">🔄 تجديد الاشتراك</button>
+            </div>
+            <div class="card">
                 <div class="card-header"><h3>👥 إدارة المستخدمين</h3></div>
                 <p style="color:var(--text-muted);font-size:13px;margin-bottom:14px;">كل مستخدم يدخل باسمه ورمزه الخاص. الأدمن يشوف كل الصفحات، الموظف العادي ما يشوف الإعدادات ولا يقدر يحذف مذاخر/مندوبين.</p>
                 <div class="form-grid">
@@ -722,6 +757,11 @@ let purchasesData = JSON.parse(localStorage.getItem('sy_purchases')) || [];
 let supplierPaymentsData = JSON.parse(localStorage.getItem('sy_supplierPayments')) || [];
 let supplierReturnsData = JSON.parse(localStorage.getItem('sy_supplierReturns')) || [];
 let customerReturnsData = JSON.parse(localStorage.getItem('sy_customerReturns')) || [];
+let appProfile = JSON.parse(localStorage.getItem('sy_profile')) || {};
+
+const RENEWAL_BARCODE = 'SY-RENEW-UNIVERSAL';
+const SUBSCRIPTION_TRIAL_DAYS = 30;
+const SUBSCRIPTION_RENEW_DAYS = 365;
 
 let cart = [];
 let currentPosPaymentType = 'كاش';
@@ -740,6 +780,64 @@ function saveData() {
     localStorage.setItem('sy_supplierPayments', JSON.stringify(supplierPaymentsData));
     localStorage.setItem('sy_supplierReturns', JSON.stringify(supplierReturnsData));
     localStorage.setItem('sy_customerReturns', JSON.stringify(customerReturnsData));
+    localStorage.setItem('sy_profile', JSON.stringify(appProfile));
+}
+function isoDatePlusDays(date, days) {
+    const d = new Date(date);
+    d.setDate(d.getDate() + days);
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+function isSubscriptionExpired() {
+    if (!appProfile.subscriptionExpiry) return false;
+    return appProfile.subscriptionExpiry < getTodayISO();
+}
+function subscriptionDaysRemaining() {
+    if (!appProfile.subscriptionExpiry) return null;
+    return Math.ceil((new Date(appProfile.subscriptionExpiry) - new Date(getTodayISO())) / 86400000);
+}
+function checkSubscriptionGate() {
+    const expired = isSubscriptionExpired();
+    document.getElementById('subscriptionLockScreen').classList.toggle('hidden', !expired);
+    document.getElementById('lockScreen').style.display = expired ? 'none' : '';
+    if (expired) document.getElementById('appContainer').classList.remove('active');
+    return expired;
+}
+function applyRenewalCode(code) {
+    code = (code || '').trim();
+    if (code !== RENEWAL_BARCODE) {
+        const subScreenVisible = !document.getElementById('subscriptionLockScreen').classList.contains('hidden');
+        if (subScreenVisible) document.getElementById('subLockError').textContent = 'كود التجديد غير صحيح.';
+        else alert('كود التجديد غير صحيح.');
+        return;
+    }
+    const base = appProfile.subscriptionExpiry && appProfile.subscriptionExpiry > getTodayISO() ? appProfile.subscriptionExpiry : getTodayISO();
+    appProfile.subscriptionExpiry = isoDatePlusDays(base, SUBSCRIPTION_RENEW_DAYS);
+    saveData();
+    const subInput = document.getElementById('subRenewInput');
+    const profInput = document.getElementById('profileRenewInput');
+    if (subInput) subInput.value = '';
+    if (profInput) profInput.value = '';
+    alert('✅ تم تجديد الاشتراك حتى ' + appProfile.subscriptionExpiry);
+    checkSubscriptionGate();
+    renderProfile();
+    if (!isSubscriptionExpired() && sessionStorage.getItem('sy_unlocked') !== '1') renderLockScreen();
+}
+function renderProfile() {
+    const nameEl = document.getElementById('profilePharmacyName');
+    if (!nameEl) return;
+    nameEl.value = appProfile.pharmacyName || '';
+    document.getElementById('profileOwnerName').value = appProfile.ownerName || '';
+    const info = document.getElementById('profileSubInfo');
+    if (!appProfile.subscriptionExpiry) { info.textContent = 'لا يوجد اشتراك مفعّل.'; return; }
+    const remaining = subscriptionDaysRemaining();
+    info.textContent = `تاريخ انتهاء الاشتراك: ${appProfile.subscriptionExpiry} — ${remaining >= 0 ? `متبقي ${remaining} يوم` : 'منتهي'}`;
+    info.style.color = remaining < 0 ? '#d32f2f' : (remaining <= 7 ? '#e67e22' : 'inherit');
+}
+function saveProfile() {
+    appProfile.pharmacyName = document.getElementById('profilePharmacyName').value.trim();
+    appProfile.ownerName = document.getElementById('profileOwnerName').value.trim();
+    saveData();
+    alert('✅ تم الحفظ.');
 }
 function supplierBalance(supplierId) {
     const purchased = purchasesData.filter(p => p.supplierId === supplierId).reduce((s, p) => s + p.total, 0);
@@ -862,6 +960,9 @@ lockBtn.addEventListener('click', function() {
         if (p1 !== p2) { lockError.textContent = 'الرمزان غير متطابقين.'; return; }
         const admin = { id: Date.now(), name, code: p1, barcode: '', isAdmin: true };
         employees.push(admin);
+        if (!appProfile.subscriptionExpiry) {
+            appProfile.subscriptionExpiry = isoDatePlusDays(getTodayISO(), SUBSCRIPTION_TRIAL_DAYS);
+        }
         saveData();
         unlockApp(admin.id);
     } else {
@@ -890,10 +991,12 @@ function lockApp() {
     location.reload();
 }
 
-if (sessionStorage.getItem('sy_unlocked') === '1' && !isFirstRun() && currentEmployee()) {
-    unlockApp();
-} else {
-    renderLockScreen();
+if (!checkSubscriptionGate()) {
+    if (sessionStorage.getItem('sy_unlocked') === '1' && !isFirstRun() && currentEmployee()) {
+        unlockApp();
+    } else {
+        renderLockScreen();
+    }
 }
 
 // =========================== المستخدمين ===========================
@@ -1196,7 +1299,7 @@ document.querySelectorAll('#mainMenu li').forEach(item => {
         if (tab === 'suppliers') { renderSuppliers(); renderReps(); renderPurchases(); renderSupplierPayments(); renderSupplierReturns(); }
         if (tab === 'log') renderInvoiceLog();
         if (tab === 'reports') renderProfitStats();
-        if (tab === 'settings') { renderDailyArchive(); renderEmployees(); }
+        if (tab === 'settings') { renderDailyArchive(); renderEmployees(); renderProfile(); }
     });
 });
 
@@ -1319,6 +1422,10 @@ async function openBarcodeScanner(targetInputId) {
                     const val = codes[0].rawValue;
                     document.getElementById(barcodeScanTarget).value = val;
                     closeBarcodeScanner();
+                    if (barcodeScanTarget === 'subRenewInput' || barcodeScanTarget === 'profileRenewInput') {
+                        applyRenewalCode(val);
+                        return;
+                    }
                     if (barcodeScanTarget === 'invBarcode' || barcodeScanTarget === 'empBarcode') return;
                     tryBarcodeAutoAdd(barcodeScanTarget);
                 } else {
