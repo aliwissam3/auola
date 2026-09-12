@@ -360,6 +360,23 @@
                     <button class="btn btn-warning" onclick="clearCart()">🗑️ تفريغ السلة</button>
                 </div>
             </div>
+
+            <div class="card">
+                <div class="card-header"><h3>↩️ مرتجع زبون</h3></div>
+                <p style="color:var(--text-muted);font-size:13px;margin-bottom:14px;">إرجاع مادة اشتراها الزبون: تُعاد الكمية للمخزون ويُخصم المبلغ من مبيعات وأرباح اليوم.</p>
+                <div class="form-grid">
+                    <div class="form-group"><label>المادة</label><select id="custReturnItemId"></select></div>
+                    <div class="form-group"><label>الكمية</label><input type="number" id="custReturnQty" min="1"></div>
+                    <div class="form-group"><label>السبب (اختياري)</label><input type="text" id="custReturnReason"></div>
+                </div>
+                <button class="btn btn-warning" onclick="returnFromCustomer()">↩️ تسجيل المرتجع</button>
+                <div class="table-wrap" style="margin-top:18px;">
+                    <table>
+                        <thead><tr><th>التاريخ</th><th>المادة</th><th>الكمية</th><th>المبلغ المسترجع</th><th>السبب</th></tr></thead>
+                        <tbody id="customerReturnsTable"></tbody>
+                    </table>
+                </div>
+            </div>
         </div>
 
         <!-- ===================== الأدوية والمخزون ===================== -->
@@ -542,6 +559,24 @@
             </div>
 
             <div class="card">
+                <div class="card-header"><h3>↩️ إرجاع بضاعة للمذخر</h3></div>
+                <p style="color:var(--text-muted);font-size:13px;margin-bottom:14px;">المرتجع يُنقص من المخزون ويُخصم من رصيد المذخر (المرتبط بالمخزن/الشركة الأصلية التي جاءت منها المادة).</p>
+                <div class="form-grid">
+                    <div class="form-group"><label>المذخر</label><select id="supReturnSupplierId"></select></div>
+                    <div class="form-group"><label>المادة</label><select id="supReturnItemId"></select></div>
+                    <div class="form-group"><label>الكمية</label><input type="number" id="supReturnQty" min="1"></div>
+                    <div class="form-group"><label>السبب (اختياري)</label><input type="text" id="supReturnReason"></div>
+                </div>
+                <button class="btn btn-warning" onclick="returnToSupplier()">↩️ تسجيل الإرجاع</button>
+                <div class="table-wrap" style="margin-top:18px;">
+                    <table>
+                        <thead><tr><th>التاريخ</th><th>المذخر</th><th>المادة</th><th>الكمية</th><th>القيمة</th><th>السبب</th></tr></thead>
+                        <tbody id="supplierReturnsTable"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card">
                 <div class="card-header"><h3>💵 تسديد المذخر</h3></div>
                 <p style="color:var(--text-muted);font-size:13px;margin-bottom:14px;">تسديدات المذاخر منفصلة عن تسديدات الديون/الزبائن (تلك في تبويب الديون). فعّل "دفعة خارجية" إذا كان المبلغ مدفوعاً من خارج قاصة المحل ولا تريد احتسابه ضمن تقارير المصاريف.</p>
                 <div class="form-grid">
@@ -685,6 +720,8 @@ let suppliers = JSON.parse(localStorage.getItem('sy_suppliers')) || [];
 let reps = JSON.parse(localStorage.getItem('sy_reps')) || [];
 let purchasesData = JSON.parse(localStorage.getItem('sy_purchases')) || [];
 let supplierPaymentsData = JSON.parse(localStorage.getItem('sy_supplierPayments')) || [];
+let supplierReturnsData = JSON.parse(localStorage.getItem('sy_supplierReturns')) || [];
+let customerReturnsData = JSON.parse(localStorage.getItem('sy_customerReturns')) || [];
 
 let cart = [];
 let currentPosPaymentType = 'كاش';
@@ -701,11 +738,14 @@ function saveData() {
     localStorage.setItem('sy_reps', JSON.stringify(reps));
     localStorage.setItem('sy_purchases', JSON.stringify(purchasesData));
     localStorage.setItem('sy_supplierPayments', JSON.stringify(supplierPaymentsData));
+    localStorage.setItem('sy_supplierReturns', JSON.stringify(supplierReturnsData));
+    localStorage.setItem('sy_customerReturns', JSON.stringify(customerReturnsData));
 }
 function supplierBalance(supplierId) {
     const purchased = purchasesData.filter(p => p.supplierId === supplierId).reduce((s, p) => s + p.total, 0);
     const paid = supplierPaymentsData.filter(p => p.supplierId === supplierId).reduce((s, p) => s + p.amount + p.discountAmount, 0);
-    return purchased - paid;
+    const returned = supplierReturnsData.filter(r => r.supplierId === supplierId).reduce((s, r) => s + r.total, 0);
+    return purchased - paid - returned;
 }
 
 // =========================== قفل التطبيق ===========================
@@ -939,7 +979,8 @@ function renderSuppliers() {
     const purSel = document.getElementById('purSupplierId');
     const repSel = document.getElementById('repSupplierId');
     const paySel = document.getElementById('paySupplierId');
-    [purSel, repSel, paySel].forEach(sel => {
+    const retSel = document.getElementById('supReturnSupplierId');
+    [purSel, repSel, paySel, retSel].forEach(sel => {
         if (!sel) return;
         const keepEmpty = sel.id === 'repSupplierId';
         const current = sel.value;
@@ -947,6 +988,12 @@ function renderSuppliers() {
             suppliers.map(s => `<option value="${s.id}">${s.name} (المتبقي: ${supplierBalance(s.id).toLocaleString()})</option>`).join('');
         sel.value = current;
     });
+    const retItemSel = document.getElementById('supReturnItemId');
+    if (retItemSel) {
+        const current = retItemSel.value;
+        retItemSel.innerHTML = inventoryData.map(p => `<option value="${p.id}">${p.name} (متوفر ${p.qty})</option>`).join('');
+        retItemSel.value = current;
+    }
     updateSupplierPayPreview();
 }
 
@@ -1062,6 +1109,36 @@ function renderPurchases() {
     }).join('') || '<tr><td colspan="5" style="text-align:center;color:#999;">لا توجد مشتريات مسجلة</td></tr>';
 }
 
+function returnToSupplier() {
+    const supplierId = document.getElementById('supReturnSupplierId').value ? Number(document.getElementById('supReturnSupplierId').value) : '';
+    const itemId = document.getElementById('supReturnItemId').value ? Number(document.getElementById('supReturnItemId').value) : '';
+    const qty = parseInt(document.getElementById('supReturnQty').value);
+    const reason = document.getElementById('supReturnReason').value.trim();
+    if (!supplierId) return alert('يرجى اختيار المذخر.');
+    const prod = inventoryData.find(p => p.id === itemId);
+    if (!prod) return alert('يرجى اختيار المادة.');
+    if (isNaN(qty) || qty <= 0) return alert('أدخل كمية صحيحة.');
+    if (qty > prod.qty) return alert(`الكمية المتوفرة (${prod.qty}) أقل من كمية الإرجاع.`);
+    const total = qty * prod.buy;
+    prod.qty -= qty;
+    supplierReturnsData.push({ id: Date.now(), date: getTodayISO(), supplierId, itemId, itemName: prod.name, qty, total, reason });
+    saveData();
+    document.getElementById('supReturnQty').value = '';
+    document.getElementById('supReturnReason').value = '';
+    renderSuppliers();
+    renderSupplierReturns();
+    renderInventory();
+    updateDashboard();
+    alert('✅ تم تسجيل إرجاع البضاعة وخصمها من رصيد المذخر.');
+}
+function renderSupplierReturns() {
+    const tbody = document.getElementById('supplierReturnsTable');
+    if (!tbody) return;
+    tbody.innerHTML = supplierReturnsData.slice().reverse().map(r => {
+        const sup = suppliers.find(s => s.id === r.supplierId);
+        return `<tr><td>${r.date}</td><td>${sup ? sup.name : '-'}</td><td>${r.itemName}</td><td>${r.qty}</td><td>${r.total.toLocaleString()}</td><td>${r.reason || '-'}</td></tr>`;
+    }).join('') || '<tr><td colspan="6" style="text-align:center;color:#999;">لا توجد مرتجعات مسجلة</td></tr>';
+}
 function updateSupplierPayPreview() {
     const preview = document.getElementById('supplierPayPreview');
     if (!preview) return;
@@ -1116,7 +1193,7 @@ document.querySelectorAll('#mainMenu li').forEach(item => {
         if (tab === 'customers') renderCustomers();
         if (tab === 'sales') renderPOS();
         if (tab === 'debts') renderDebts();
-        if (tab === 'suppliers') { renderSuppliers(); renderReps(); renderPurchases(); renderSupplierPayments(); }
+        if (tab === 'suppliers') { renderSuppliers(); renderReps(); renderPurchases(); renderSupplierPayments(); renderSupplierReturns(); }
         if (tab === 'log') renderInvoiceLog();
         if (tab === 'reports') renderProfitStats();
         if (tab === 'settings') { renderDailyArchive(); renderEmployees(); }
@@ -1554,6 +1631,41 @@ function renderPOS() {
         <td><button class="btn btn-success btn-sm" onclick="addToCart(${p.id})">+</button></td></tr>`
     ).join('') || '<tr><td colspan="6" style="text-align:center;color:#999;">لا توجد أدوية</td></tr>';
     renderCart();
+    const returnSel = document.getElementById('custReturnItemId');
+    if (returnSel) {
+        const current = returnSel.value;
+        returnSel.innerHTML = inventoryData.map(p => `<option value="${p.id}">${p.name} (${p.sell.toLocaleString()} د.ع)</option>`).join('');
+        returnSel.value = current;
+    }
+    renderCustomerReturns();
+}
+function returnFromCustomer() {
+    const itemId = document.getElementById('custReturnItemId').value ? Number(document.getElementById('custReturnItemId').value) : '';
+    const qty = parseInt(document.getElementById('custReturnQty').value);
+    const reason = document.getElementById('custReturnReason').value.trim();
+    const prod = inventoryData.find(p => p.id === itemId);
+    if (!prod) return alert('يرجى اختيار المادة.');
+    if (isNaN(qty) || qty <= 0) return alert('أدخل كمية صحيحة.');
+    const amount = qty * prod.sell;
+    const profitLoss = (prod.sell - prod.buy) * qty;
+    prod.qty += qty;
+    customerReturnsData.push({ id: Date.now(), date: getTodayISO(), itemId, itemName: prod.name, qty, amount, reason });
+    const now = new Date();
+    dailySalesData.push({ date: now.toLocaleDateString(), time: now.toLocaleTimeString(), desc: `مرتجع زبون (${prod.name} x${qty})`, totalAmount: -amount, profitAmount: -profitLoss });
+    saveData();
+    document.getElementById('custReturnQty').value = '';
+    document.getElementById('custReturnReason').value = '';
+    renderPOS();
+    renderInventory();
+    updateDashboard();
+    alert('✅ تم تسجيل المرتجع وإعادة الكمية للمخزون.');
+}
+function renderCustomerReturns() {
+    const tbody = document.getElementById('customerReturnsTable');
+    if (!tbody) return;
+    tbody.innerHTML = customerReturnsData.slice().reverse().map(r =>
+        `<tr><td>${r.date}</td><td>${r.itemName}</td><td>${r.qty}</td><td>${r.amount.toLocaleString()}</td><td>${r.reason || '-'}</td></tr>`
+    ).join('') || '<tr><td colspan="5" style="text-align:center;color:#999;">لا توجد مرتجعات مسجلة</td></tr>';
 }
 function addToCart(id) {
     const prod = inventoryData.find(p => p.id === id);
