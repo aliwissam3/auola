@@ -219,6 +219,15 @@
     </div>
 </div>
 
+<!-- ===================== نافذة تفاصيل الفاتورة ===================== -->
+<div id="invoiceDetailModal" class="hidden">
+    <div class="modal-box">
+        <h3 style="margin-bottom:10px;">🧾 تفاصيل الفاتورة</h3>
+        <div id="invoiceDetailBody"></div>
+        <button class="btn btn-danger" style="width:100%;margin-top:12px;" onclick="closeInvoiceDetailModal()">إغلاق</button>
+    </div>
+</div>
+
 <!-- ===================== شاشة القفل ===================== -->
 <div id="lockScreen">
     <div class="lock-card">
@@ -256,6 +265,7 @@
             <li data-tab="customers"><i>👥</i> <span>العملاء</span></li>
             <li data-tab="debts"><i>💰</i> <span>الديون</span></li>
             <li data-tab="suppliers"><i>🏭</i> <span>المذاخر والمندوبين</span></li>
+            <li data-tab="log"><i>📜</i> <span>السجل</span></li>
             <li data-tab="reports"><i>📈</i> <span>التقارير</span></li>
             <li data-tab="settings"><i>⚙️</i> <span>الإعدادات</span></li>
         </ul>
@@ -538,6 +548,27 @@
                         <thead><tr><th>التاريخ</th><th>المذخر</th><th>المندوب</th><th>عدد المواد</th><th>الإجمالي</th></tr></thead>
                         <tbody id="purchasesTable"></tbody>
                     </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===================== السجل ===================== -->
+        <div id="section-log" class="section hidden">
+            <div class="card">
+                <div class="card-header"><h3>📜 سجل كل الفواتير</h3></div>
+                <div class="form-grid">
+                    <div class="form-group"><label>بحث</label><input type="text" id="logSearch" placeholder="ابحث بالوصف أو التاريخ" oninput="renderInvoiceLog()"></div>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>التاريخ</th><th>الوقت</th><th>الوصف</th><th>الإجمالي</th><th>الربح</th><th>نسبة الربح</th><th>الإجمالي التراكمي</th></tr></thead>
+                        <tbody id="logTable"></tbody>
+                    </table>
+                </div>
+                <div style="margin-top:12px;font-weight:bold;display:flex;gap:20px;flex-wrap:wrap;">
+                    <span>عدد الفواتير: <span id="logCount">0</span></span>
+                    <span>إجمالي المبيعات: <span id="logGrandTotal">0</span> د.ع</span>
+                    <span>إجمالي الأرباح: <span id="logGrandProfit">0</span> د.ع</span>
                 </div>
             </div>
         </div>
@@ -1025,6 +1056,7 @@ document.querySelectorAll('#mainMenu li').forEach(item => {
         if (tab === 'sales') renderPOS();
         if (tab === 'debts') renderDebts();
         if (tab === 'suppliers') { renderSuppliers(); renderReps(); renderPurchases(); }
+        if (tab === 'log') renderInvoiceLog();
         if (tab === 'reports') renderProfitStats();
         if (tab === 'settings') { renderDailyArchive(); renderEmployees(); }
     });
@@ -1234,8 +1266,59 @@ function updateDashboard() {
 function showDailySaleDetails(idx) {
     const today = new Date().toLocaleDateString();
     const daily = dailySalesData.filter(t => t.date === today);
-    const item = daily[idx];
-    alert(`📦 التفاصيل:\n${item.desc}\nالمبلغ: ${item.totalAmount}\nالربح: ${item.profitAmount}`);
+    showInvoiceDetail(daily[idx]);
+}
+function showInvoiceDetail(sale) {
+    const body = document.getElementById('invoiceDetailBody');
+    const profitPct = sale.totalAmount ? ((sale.profitAmount / sale.totalAmount) * 100).toFixed(1) : '0.0';
+    let rowsHtml = '';
+    if (sale.items && sale.items.length) {
+        rowsHtml = `<div class="table-wrap"><table>
+            <thead><tr><th>المادة</th><th>الكمية</th><th>سعر البيع</th><th>الإجمالي</th><th>الربح</th></tr></thead>
+            <tbody>${sale.items.map(i => {
+                const lineTotal = i.sell * i.qty;
+                const lineProfit = (i.sell - (i.buy || 0)) * i.qty;
+                return `<tr><td>${i.name}</td><td>${i.qty}</td><td>${i.sell.toLocaleString()}</td><td>${lineTotal.toLocaleString()}</td><td>${lineProfit.toLocaleString()}</td></tr>`;
+            }).join('')}</tbody>
+        </table></div>`;
+    } else {
+        rowsHtml = `<p style="color:var(--text-muted);">${sale.desc}</p>`;
+    }
+    body.innerHTML = `
+        <p style="color:var(--text-muted);font-size:13px;margin-bottom:10px;">${sale.date} — ${sale.time || ''}</p>
+        ${rowsHtml}
+        <div style="margin-top:12px;font-weight:bold;display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+            <span>الإجمالي: ${sale.totalAmount.toLocaleString()} د.ع</span>
+            <span>الربح: ${sale.profitAmount.toLocaleString()} د.ع</span>
+            <span>نسبة الربح: ${profitPct}%</span>
+        </div>`;
+    document.getElementById('invoiceDetailModal').classList.remove('hidden');
+}
+function closeInvoiceDetailModal() {
+    document.getElementById('invoiceDetailModal').classList.add('hidden');
+}
+
+// =========================== السجل ===========================
+function renderInvoiceLog() {
+    const q = (document.getElementById('logSearch').value || '').toLowerCase();
+    const filtered = dailySalesData
+        .map((s, i) => ({ s, i }))
+        .filter(({ s }) => !q || s.desc.toLowerCase().includes(q) || s.date.toLowerCase().includes(q));
+    const tbody = document.getElementById('logTable');
+    let running = 0;
+    const grandTotal = dailySalesData.reduce((a, s) => a + s.totalAmount, 0);
+    const grandProfit = dailySalesData.reduce((a, s) => a + s.profitAmount, 0);
+    tbody.innerHTML = filtered.map(({ s, i }) => {
+        running += s.totalAmount;
+        const pct = s.totalAmount ? ((s.profitAmount / s.totalAmount) * 100).toFixed(1) : '0.0';
+        return `<tr onclick="showInvoiceDetail(dailySalesData[${i}])" style="cursor:pointer;">
+            <td>${s.date}</td><td>${s.time || '-'}</td><td>${s.desc}</td>
+            <td>${s.totalAmount.toLocaleString()}</td><td>${s.profitAmount.toLocaleString()}</td>
+            <td>${pct}%</td><td>${running.toLocaleString()}</td></tr>`;
+    }).join('') || '<tr><td colspan="7" style="text-align:center;color:#999;">لا توجد فواتير</td></tr>';
+    document.getElementById('logCount').textContent = filtered.length;
+    document.getElementById('logGrandTotal').textContent = grandTotal.toLocaleString();
+    document.getElementById('logGrandProfit').textContent = grandProfit.toLocaleString();
 }
 
 // =========================== الرسم البياني (بدون أي مكتبات خارجية) ===========================
@@ -1497,12 +1580,16 @@ function checkoutPOS() {
         return;
     }
 
+    const saleItems = cart.map(item => {
+        const prod = inventoryData.find(p => p.id === item.id);
+        return { id: item.id, name: item.name, qty: item.qty, sell: item.sell, buy: prod ? prod.buy : 0 };
+    });
     cart.forEach(item => {
         const prod = inventoryData.find(p => p.id === item.id);
         if (prod) prod.qty -= item.qty;
         withdrawalsData.push({ date, time, name: item.name, qty: item.qty, total: item.sell * item.qty });
     });
-    dailySalesData.push({ date, time, desc, totalAmount: total, profitAmount: profit });
+    dailySalesData.push({ date, time, desc, totalAmount: total, profitAmount: profit, items: saleItems });
     saveData();
     cart = [];
     setPosPayment('كاش');
