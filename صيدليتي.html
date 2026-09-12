@@ -241,6 +241,7 @@
             <li data-tab="inventory"><i>📦</i> <span>الأدوية والمخزون</span></li>
             <li data-tab="customers"><i>👥</i> <span>العملاء</span></li>
             <li data-tab="debts"><i>💰</i> <span>الديون</span></li>
+            <li data-tab="suppliers"><i>🏭</i> <span>المذاخر والمندوبين</span></li>
             <li data-tab="reports"><i>📈</i> <span>التقارير</span></li>
             <li data-tab="settings"><i>⚙️</i> <span>الإعدادات</span></li>
         </ul>
@@ -454,6 +455,79 @@
             </div>
         </div>
 
+        <!-- ===================== المذاخر والمندوبين ===================== -->
+        <div id="section-suppliers" class="section hidden">
+            <div class="card">
+                <div class="card-header"><h3>🏭 المذاخر (الموردين)</h3></div>
+                <div class="form-grid">
+                    <div class="form-group"><label>اسم المذخر</label><input type="text" id="supName"></div>
+                    <div class="form-group"><label>رقم الهاتف</label><input type="text" id="supPhone"></div>
+                </div>
+                <button class="btn btn-primary" onclick="addSupplier()">➕ إضافة مذخر</button>
+                <div class="table-wrap" style="margin-top:18px;">
+                    <table>
+                        <thead><tr><th>الاسم</th><th>الهاتف</th><th>الرصيد المستحق</th><th>إجراء</th></tr></thead>
+                        <tbody id="suppliersTable"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header"><h3>🧑‍💼 المندوبين</h3></div>
+                <div class="form-grid">
+                    <div class="form-group"><label>اسم المندوب</label><input type="text" id="repName"></div>
+                    <div class="form-group"><label>رقم الهاتف</label><input type="text" id="repPhone"></div>
+                    <div class="form-group"><label>الشركة</label><input type="text" id="repCompany" placeholder="اسم الشركة التي يمثلها"></div>
+                    <div class="form-group"><label>المذخر (المخزن)</label>
+                        <select id="repSupplierId"><option value="">— بدون —</option></select>
+                    </div>
+                </div>
+                <button class="btn btn-primary" onclick="addRep()">➕ إضافة مندوب</button>
+                <div class="table-wrap" style="margin-top:18px;">
+                    <table>
+                        <thead><tr><th>الاسم</th><th>الهاتف</th><th>الشركة</th><th>المذخر</th><th>إجراء</th></tr></thead>
+                        <tbody id="repsTable"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header"><h3>🧾 تسجيل عملية شراء</h3></div>
+                <div class="form-grid">
+                    <div class="form-group"><label>المذخر</label><select id="purSupplierId"></select></div>
+                    <div class="form-group"><label>المندوب (اختياري)</label><select id="purRepId"><option value="">— بدون —</option></select></div>
+                </div>
+                <hr style="margin:14px 0;">
+                <div class="form-grid">
+                    <div class="form-group"><label>اسم المادة</label><input type="text" id="purItemName"></div>
+                    <div class="form-group"><label>الكمية</label><input type="number" id="purItemQty" min="1"></div>
+                    <div class="form-group"><label>سعر الشراء (للوحدة)</label><input type="number" id="purItemBuy" min="0"></div>
+                    <div class="form-group"><label>سعر البيع (للوحدة)</label><input type="number" id="purItemSell" min="0"></div>
+                    <div class="form-group"><label>تاريخ الصلاحية</label><input type="date" id="purItemExpiry"></div>
+                    <div class="form-group"><label>رقم الدفعة</label><input type="text" id="purItemBatch"></div>
+                </div>
+                <button class="btn btn-warning" onclick="addPurchaseCartItem()">➕ إضافة مادة للفاتورة</button>
+                <div class="table-wrap" style="margin-top:14px;">
+                    <table>
+                        <thead><tr><th>المادة</th><th>الكمية</th><th>سعر الشراء</th><th>سعر البيع</th><th>الإجمالي</th><th></th></tr></thead>
+                        <tbody id="purchaseCartTable"></tbody>
+                    </table>
+                </div>
+                <div style="margin-top:10px;font-weight:bold;">إجمالي الفاتورة: <span id="purchaseCartTotal">0</span> د.ع</div>
+                <button class="btn btn-success" style="margin-top:12px;" onclick="savePurchaseInvoice()">💾 حفظ عملية الشراء (تضاف تلقائياً للمخزون)</button>
+            </div>
+
+            <div class="card">
+                <div class="card-header"><h3>📋 سجل المشتريات</h3></div>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>التاريخ</th><th>المذخر</th><th>المندوب</th><th>عدد المواد</th><th>الإجمالي</th></tr></thead>
+                        <tbody id="purchasesTable"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
         <!-- ===================== التقارير ===================== -->
         <div id="section-reports" class="section hidden">
             <div class="card">
@@ -543,6 +617,10 @@ let debtsData = JSON.parse(localStorage.getItem('sy_debts')) || [];
 let dailySalesData = JSON.parse(localStorage.getItem('sy_dailySales')) || [];
 let withdrawalsData = JSON.parse(localStorage.getItem('sy_withdrawals')) || [];
 let employees = JSON.parse(localStorage.getItem('sy_employees')) || [];
+let suppliers = JSON.parse(localStorage.getItem('sy_suppliers')) || [];
+let reps = JSON.parse(localStorage.getItem('sy_reps')) || [];
+let purchasesData = JSON.parse(localStorage.getItem('sy_purchases')) || [];
+let supplierPaymentsData = JSON.parse(localStorage.getItem('sy_supplierPayments')) || [];
 
 let cart = [];
 let currentPosPaymentType = 'كاش';
@@ -555,6 +633,15 @@ function saveData() {
     localStorage.setItem('sy_dailySales', JSON.stringify(dailySalesData));
     localStorage.setItem('sy_withdrawals', JSON.stringify(withdrawalsData));
     localStorage.setItem('sy_employees', JSON.stringify(employees));
+    localStorage.setItem('sy_suppliers', JSON.stringify(suppliers));
+    localStorage.setItem('sy_reps', JSON.stringify(reps));
+    localStorage.setItem('sy_purchases', JSON.stringify(purchasesData));
+    localStorage.setItem('sy_supplierPayments', JSON.stringify(supplierPaymentsData));
+}
+function supplierBalance(supplierId) {
+    const purchased = purchasesData.filter(p => p.supplierId === supplierId).reduce((s, p) => s + p.total, 0);
+    const paid = supplierPaymentsData.filter(p => p.supplierId === supplierId).reduce((s, p) => s + p.amount, 0);
+    return purchased - paid;
 }
 
 // =========================== قفل التطبيق ===========================
@@ -753,6 +840,162 @@ function applyRolePermissions() {
     if (userRow && emp) userRow.textContent = `${emp.name}${admin ? ' (أدمن)' : ''}`;
 }
 
+// =========================== المذاخر والمندوبين والمشتريات ===========================
+let purchaseCart = [];
+
+function addSupplier() {
+    const name = document.getElementById('supName').value.trim();
+    const phone = document.getElementById('supPhone').value.trim();
+    if (!name) return alert('اسم المذخر مطلوب.');
+    suppliers.push({ id: Date.now(), name, phone });
+    saveData();
+    document.getElementById('supName').value = '';
+    document.getElementById('supPhone').value = '';
+    renderSuppliers();
+}
+function deleteSupplier(id) {
+    if (!isAdmin()) return alert('حذف المذاخر متاح للأدمن فقط.');
+    if (purchasesData.some(p => p.supplierId === id)) {
+        if (!confirm('هذا المذخر لديه فواتير شراء مسجلة. حذفه لن يحذف الفواتير. متابعة؟')) return;
+    } else if (!confirm('حذف هذا المذخر؟')) return;
+    suppliers = suppliers.filter(s => s.id !== id);
+    reps.forEach(r => { if (r.supplierId === id) r.supplierId = ''; });
+    saveData();
+    renderSuppliers();
+    renderReps();
+}
+function renderSuppliers() {
+    const tbody = document.getElementById('suppliersTable');
+    if (!tbody) return;
+    const admin = isAdmin();
+    tbody.innerHTML = suppliers.map(s => `
+        <tr><td>${s.name}</td><td>${s.phone || '-'}</td><td>${supplierBalance(s.id).toLocaleString()} د.ع</td>
+        <td>${admin ? `<button class="btn btn-danger btn-sm" onclick="deleteSupplier(${s.id})">حذف</button>` : '-'}</td></tr>
+    `).join('') || '<tr><td colspan="4" style="text-align:center;color:#999;">لا يوجد مذاخر</td></tr>';
+    const purSel = document.getElementById('purSupplierId');
+    const repSel = document.getElementById('repSupplierId');
+    [purSel, repSel].forEach(sel => {
+        if (!sel) return;
+        const keepEmpty = sel.id === 'repSupplierId';
+        const current = sel.value;
+        sel.innerHTML = (keepEmpty ? '<option value="">— بدون —</option>' : '') +
+            suppliers.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+        sel.value = current;
+    });
+}
+
+function addRep() {
+    const name = document.getElementById('repName').value.trim();
+    const phone = document.getElementById('repPhone').value.trim();
+    const company = document.getElementById('repCompany').value.trim();
+    const supplierId = document.getElementById('repSupplierId').value ? Number(document.getElementById('repSupplierId').value) : '';
+    if (!name) return alert('اسم المندوب مطلوب.');
+    reps.push({ id: Date.now(), name, phone, company, supplierId });
+    saveData();
+    document.getElementById('repName').value = '';
+    document.getElementById('repPhone').value = '';
+    document.getElementById('repCompany').value = '';
+    document.getElementById('repSupplierId').value = '';
+    renderReps();
+}
+function deleteRep(id) {
+    if (!isAdmin()) return alert('حذف المندوبين متاح للأدمن فقط.');
+    if (confirm('حذف هذا المندوب؟')) {
+        reps = reps.filter(r => r.id !== id);
+        saveData();
+        renderReps();
+    }
+}
+function renderReps() {
+    const tbody = document.getElementById('repsTable');
+    if (!tbody) return;
+    const admin = isAdmin();
+    tbody.innerHTML = reps.map(r => {
+        const sup = suppliers.find(s => s.id === r.supplierId);
+        return `<tr><td>${r.name}</td><td>${r.phone || '-'}</td><td>${r.company || '-'}</td><td>${sup ? sup.name : '-'}</td>
+        <td>${admin ? `<button class="btn btn-danger btn-sm" onclick="deleteRep(${r.id})">حذف</button>` : '-'}</td></tr>`;
+    }).join('') || '<tr><td colspan="5" style="text-align:center;color:#999;">لا يوجد مندوبون</td></tr>';
+    const purRepSel = document.getElementById('purRepId');
+    if (purRepSel) {
+        const current = purRepSel.value;
+        purRepSel.innerHTML = '<option value="">— بدون —</option>' + reps.map(r => `<option value="${r.id}">${r.name}</option>`).join('');
+        purRepSel.value = current;
+    }
+}
+
+function addPurchaseCartItem() {
+    const name = document.getElementById('purItemName').value.trim();
+    const qty = parseInt(document.getElementById('purItemQty').value);
+    const buy = parseFloat(document.getElementById('purItemBuy').value);
+    const sell = parseFloat(document.getElementById('purItemSell').value);
+    const expiry = document.getElementById('purItemExpiry').value;
+    const batch = document.getElementById('purItemBatch').value.trim();
+    if (!name || isNaN(qty) || isNaN(buy) || isNaN(sell) || qty <= 0) {
+        return alert('يرجى ملء اسم المادة والكمية وسعري الشراء والبيع بشكل صحيح.');
+    }
+    purchaseCart.push({ name, qty, buy, sell, expiry, batch });
+    ['purItemName','purItemQty','purItemBuy','purItemSell','purItemExpiry','purItemBatch'].forEach(id => document.getElementById(id).value = '');
+    renderPurchaseCart();
+}
+function removePurchaseCartItem(index) {
+    purchaseCart.splice(index, 1);
+    renderPurchaseCart();
+}
+function renderPurchaseCart() {
+    const tbody = document.getElementById('purchaseCartTable');
+    let total = 0;
+    tbody.innerHTML = purchaseCart.map((it, i) => {
+        const lineTotal = it.qty * it.buy;
+        total += lineTotal;
+        return `<tr><td>${it.name}</td><td>${it.qty}</td><td>${it.buy.toLocaleString()}</td><td>${it.sell.toLocaleString()}</td><td>${lineTotal.toLocaleString()}</td>
+        <td><button class="btn btn-danger btn-sm" onclick="removePurchaseCartItem(${i})">حذف</button></td></tr>`;
+    }).join('') || '<tr><td colspan="6" style="text-align:center;color:#999;">لا توجد مواد بعد</td></tr>';
+    document.getElementById('purchaseCartTotal').textContent = total.toLocaleString();
+}
+function savePurchaseInvoice() {
+    const supplierId = document.getElementById('purSupplierId').value ? Number(document.getElementById('purSupplierId').value) : '';
+    const repId = document.getElementById('purRepId').value ? Number(document.getElementById('purRepId').value) : '';
+    if (!supplierId) return alert('يرجى اختيار المذخر.');
+    if (purchaseCart.length === 0) return alert('أضف مادة واحدة على الأقل للفاتورة.');
+    let total = 0;
+    purchaseCart.forEach(it => {
+        total += it.qty * it.buy;
+        const existing = inventoryData.find(p => p.name.trim().toLowerCase() === it.name.trim().toLowerCase());
+        if (existing) {
+            existing.qty += it.qty;
+            existing.buy = it.buy;
+            existing.sell = it.sell;
+            if (it.expiry) existing.expiry = it.expiry;
+            if (it.batch) existing.batch = it.batch;
+        } else {
+            inventoryData.push({
+                id: Date.now() + Math.floor(Math.random() * 1000),
+                name: it.name, generic: '', cat: 'أخرى', manufacturer: '', unit: 'حبة',
+                buy: it.buy, sell: it.sell, qty: it.qty, batch: it.batch, expiry: it.expiry,
+                rx: false, barcode: '', note: ''
+            });
+        }
+    });
+    purchasesData.push({ id: Date.now(), date: getTodayISO(), supplierId, repId, items: purchaseCart.slice(), total });
+    saveData();
+    purchaseCart = [];
+    renderPurchaseCart();
+    renderPurchases();
+    renderSuppliers();
+    renderInventory();
+    updateDashboard();
+    alert('✅ تم حفظ عملية الشراء وإضافة المواد للمخزون.');
+}
+function renderPurchases() {
+    const tbody = document.getElementById('purchasesTable');
+    if (!tbody) return;
+    tbody.innerHTML = purchasesData.slice().reverse().map(p => {
+        const sup = suppliers.find(s => s.id === p.supplierId);
+        const rep = reps.find(r => r.id === p.repId);
+        return `<tr><td>${p.date}</td><td>${sup ? sup.name : '-'}</td><td>${rep ? rep.name : '-'}</td><td>${p.items.length}</td><td>${p.total.toLocaleString()}</td></tr>`;
+    }).join('') || '<tr><td colspan="5" style="text-align:center;color:#999;">لا توجد مشتريات مسجلة</td></tr>';
+}
+
 // =========================== تبديل الأقسام ===========================
 document.querySelectorAll('#mainMenu li').forEach(item => {
     item.addEventListener('click', function() {
@@ -767,6 +1010,7 @@ document.querySelectorAll('#mainMenu li').forEach(item => {
         if (tab === 'customers') renderCustomers();
         if (tab === 'sales') renderPOS();
         if (tab === 'debts') renderDebts();
+        if (tab === 'suppliers') { renderSuppliers(); renderReps(); renderPurchases(); }
         if (tab === 'reports') renderProfitStats();
         if (tab === 'settings') { renderDailyArchive(); renderEmployees(); }
     });
