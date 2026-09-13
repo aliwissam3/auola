@@ -253,6 +253,11 @@
         <input type="text" id="lockNameInput" placeholder="الاسم" style="letter-spacing:normal;font-size:15px;">
         <input type="password" id="lockInput" inputmode="numeric" placeholder="الرمز ••••" maxlength="12">
         <input type="password" id="lockInputConfirm" placeholder="تأكيد الرمز" class="hidden" maxlength="12">
+        <div class="barcode-input-row hidden" id="lockNewBarcodeRow" style="margin-top:8px;">
+            <input type="text" id="lockNewBarcodeInput" placeholder="باركود الدخول (اختياري)">
+            <button type="button" class="icon-btn" onclick="openBarcodeScanner('lockNewBarcodeInput')" title="مسح بالكاميرا">📷</button>
+            <button type="button" class="icon-btn" onclick="document.getElementById('lockNewBarcodeInput').value = '3' + Date.now().toString().slice(-11);" title="توليد باركود">🔀</button>
+        </div>
         <div class="lock-error" id="lockError"></div>
         <button class="btn btn-primary" id="lockBtn" style="width:100%;justify-content:center;">دخول</button>
         <div id="lockBarcodeSection" class="hidden">
@@ -743,7 +748,8 @@
                     </div>
                     <div class="form-group checkbox-row"><input type="checkbox" id="empIsAdmin"><label style="padding:0;">صلاحية أدمن</label></div>
                 </div>
-                <button class="btn btn-primary" onclick="addEmployee()">➕ إضافة مستخدم</button>
+                <button class="btn btn-primary" id="empSaveBtn" onclick="addEmployee()">➕ إضافة مستخدم</button>
+                <button class="btn btn-warning hidden" id="empCancelEditBtn" onclick="cancelEditEmployee()">✖️ إلغاء التعديل</button>
                 <div class="table-wrap" style="margin-top:18px;">
                     <table>
                         <thead><tr><th>الاسم</th><th>الرمز</th><th>الباركود</th><th>الصلاحية</th><th>إجراء</th></tr></thead>
@@ -1018,13 +1024,16 @@ function renderLockScreen() {
         lockSub.textContent = 'أول استخدام: أنشئ حساب المدير (الأدمن)';
         lockInputConfirm.classList.remove('hidden');
         lockInputConfirm.placeholder = 'تأكيد الرمز';
+        document.getElementById('lockNewBarcodeRow').classList.remove('hidden');
         lockBtn.textContent = 'إنشاء حساب المدير';
     } else {
         lockSub.textContent = 'أدخل الاسم والرمز للدخول';
         lockInputConfirm.classList.add('hidden');
+        document.getElementById('lockNewBarcodeRow').classList.add('hidden');
         lockBtn.textContent = 'دخول';
     }
     lockNameInput.value = ''; lockInput.value = ''; lockInputConfirm.value = ''; lockError.textContent = '';
+    document.getElementById('lockNewBarcodeInput').value = '';
     const barcodeSection = document.getElementById('lockBarcodeSection');
     const lockBarcodeInput = document.getElementById('lockBarcodeInput');
     const hasAnyBarcode = !isFirstRun() && employees.some(e => e.barcode);
@@ -1098,7 +1107,8 @@ lockBtn.addEventListener('click', function() {
         if (!name) { lockError.textContent = 'أدخل اسم المدير.'; return; }
         if (p1.length < 4) { lockError.textContent = 'الرمز يجب أن يكون 4 أحرف/أرقام على الأقل.'; return; }
         if (p1 !== p2) { lockError.textContent = 'الرمزان غير متطابقين.'; return; }
-        const admin = { id: Date.now(), name, code: p1, barcode: '', isAdmin: true };
+        const barcode = document.getElementById('lockNewBarcodeInput').value.trim();
+        const admin = { id: Date.now(), name, code: p1, barcode, isAdmin: true };
         employees.push(admin);
         if (!appProfile.subscriptionExpiry) {
             appProfile.subscriptionExpiry = isoDatePlusDays(getTodayISO(), SUBSCRIPTION_TRIAL_DAYS);
@@ -1140,22 +1150,45 @@ if (!checkSubscriptionGate()) {
 }
 
 // =========================== المستخدمين ===========================
+let editingEmployeeId = null;
 function addEmployee() {
     const name = document.getElementById('empName').value.trim();
     const code = document.getElementById('empCode').value.trim();
     const barcode = document.getElementById('empBarcode').value.trim();
     const isAdminChecked = document.getElementById('empIsAdmin').checked;
     if (!name || !code) return alert('الاسم والرمز مطلوبان.');
-    if (employees.some(e => e.name === name)) return alert('يوجد مستخدم بهذا الاسم مسبقاً.');
-    if (barcode && employees.some(e => e.barcode === barcode)) return alert('هذا الباركود مستخدم لمستخدم آخر مسبقاً.');
-    employees.push({ id: Date.now(), name, code, barcode, isAdmin: isAdminChecked });
+    if (employees.some(e => e.name === name && e.id !== editingEmployeeId)) return alert('يوجد مستخدم بهذا الاسم مسبقاً.');
+    if (barcode && employees.some(e => e.barcode === barcode && e.id !== editingEmployeeId)) return alert('هذا الباركود مستخدم لمستخدم آخر مسبقاً.');
+    if (editingEmployeeId !== null) {
+        const emp = employees.find(e => e.id === editingEmployeeId);
+        emp.name = name; emp.code = code; emp.barcode = barcode; emp.isAdmin = isAdminChecked;
+    } else {
+        employees.push({ id: Date.now(), name, code, barcode, isAdmin: isAdminChecked });
+    }
     saveData();
+    cancelEditEmployee();
+    renderEmployees();
+    renderLockScreen();
+}
+function editEmployee(id) {
+    const emp = employees.find(e => e.id === id);
+    if (!emp) return;
+    editingEmployeeId = id;
+    document.getElementById('empName').value = emp.name;
+    document.getElementById('empCode').value = emp.code;
+    document.getElementById('empBarcode').value = emp.barcode || '';
+    document.getElementById('empIsAdmin').checked = !!emp.isAdmin;
+    document.getElementById('empSaveBtn').textContent = '💾 حفظ التعديل';
+    document.getElementById('empCancelEditBtn').classList.remove('hidden');
+}
+function cancelEditEmployee() {
+    editingEmployeeId = null;
     document.getElementById('empName').value = '';
     document.getElementById('empCode').value = '';
     document.getElementById('empBarcode').value = '';
     document.getElementById('empIsAdmin').checked = false;
-    renderEmployees();
-    renderLockScreen();
+    document.getElementById('empSaveBtn').textContent = '➕ إضافة مستخدم';
+    document.getElementById('empCancelEditBtn').classList.add('hidden');
 }
 function deleteEmployee(id) {
     if (employees.length <= 1) return alert('لازم يبقى مستخدم واحد على الأقل.');
@@ -1176,7 +1209,8 @@ function renderEmployees() {
     tbody.innerHTML = employees.map(e => `
         <tr><td>${e.name}</td><td>${e.code}</td><td>${e.barcode ? `<span class="barcode-text">${e.barcode}</span>` : '-'}</td>
         <td>${e.isAdmin ? '<span class="rx-badge" style="background:var(--primary-light);">أدمن</span>' : 'موظف'}</td>
-        <td><button class="btn btn-danger btn-sm" onclick="deleteEmployee(${e.id})">حذف</button></td></tr>
+        <td><button class="btn btn-warning btn-sm" onclick="editEmployee(${e.id})">تعديل</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteEmployee(${e.id})">حذف</button></td></tr>
     `).join('') || '<tr><td colspan="5" style="text-align:center;color:#999;">لا يوجد مستخدمون</td></tr>';
 }
 function applyRolePermissions() {
@@ -1567,7 +1601,7 @@ async function openBarcodeScanner(targetInputId) {
                         applyRenewalCode(val);
                         return;
                     }
-                    if (barcodeScanTarget === 'invBarcode' || barcodeScanTarget === 'empBarcode') return;
+                    if (barcodeScanTarget === 'invBarcode' || barcodeScanTarget === 'empBarcode' || barcodeScanTarget === 'lockNewBarcodeInput') return;
                     tryBarcodeAutoAdd(barcodeScanTarget);
                 } else {
                     barcodeRAF = requestAnimationFrame(loop);
