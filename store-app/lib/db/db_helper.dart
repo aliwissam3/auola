@@ -33,7 +33,9 @@ class DbHelper {
   }
 
   Future<Database> _open() async {
-    final dir = await getApplicationDocumentsDirectory();
+    // App-support storage (not Documents): private to this app and doesn't
+    // depend on user-configurable folders that may not exist on every machine.
+    final dir = await getApplicationSupportDirectory();
     final path = join(dir.path, 'store_app.db');
     return openDatabase(
       path,
