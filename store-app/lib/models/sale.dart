@@ -1,7 +1,7 @@
 class SaleItem {
-  final int? id;
-  final int? saleId;
-  final int productId;
+  final String? id;
+  final String? saleId;
+  final String productId;
   final String productName;
   final double quantity;
   final double unitPrice;
@@ -20,10 +20,9 @@ class SaleItem {
   double get subtotal => quantity * unitPrice;
   double get profit => quantity * (unitPrice - buyPriceAtSale);
 
-  Map<String, Object?> toMap() {
+  /// Shape expected by the `create_sale` RPC's `p_items` jsonb array.
+  Map<String, Object?> toRpcItem() {
     return {
-      'id': id,
-      'sale_id': saleId,
       'product_id': productId,
       'product_name': productName,
       'quantity': quantity,
@@ -32,11 +31,11 @@ class SaleItem {
     };
   }
 
-  factory SaleItem.fromMap(Map<String, Object?> map) {
+  factory SaleItem.fromMap(Map<String, dynamic> map) {
     return SaleItem(
-      id: map['id'] as int?,
-      saleId: map['sale_id'] as int?,
-      productId: map['product_id'] as int,
+      id: map['id'] as String?,
+      saleId: map['sale_id'] as String?,
+      productId: map['product_id'] as String,
       productName: map['product_name'] as String,
       quantity: (map['quantity'] as num).toDouble(),
       unitPrice: (map['unit_price'] as num).toDouble(),
@@ -46,8 +45,8 @@ class SaleItem {
 }
 
 class Sale {
-  final int? id;
-  final int employeeId;
+  final String? id;
+  final String employeeId;
   final String employeeName;
   final String customerName;
   final DateTime date;
@@ -72,23 +71,10 @@ class Sale {
   bool get isFullyPaid => debtAmount <= 0.0001;
   double get totalProfit => items.fold<double>(0, (sum, item) => sum + item.profit);
 
-  Map<String, Object?> toMap() {
-    return {
-      'id': id,
-      'employee_id': employeeId,
-      'employee_name': employeeName,
-      'customer_name': customerName,
-      'date': date.toIso8601String(),
-      'total_amount': totalAmount,
-      'paid_amount': paidAmount,
-      'note': note,
-    };
-  }
-
-  factory Sale.fromMap(Map<String, Object?> map) {
+  factory Sale.fromMap(Map<String, dynamic> map) {
     return Sale(
-      id: map['id'] as int?,
-      employeeId: map['employee_id'] as int,
+      id: map['id'] as String?,
+      employeeId: map['employee_id'] as String,
       employeeName: map['employee_name'] as String,
       customerName: map['customer_name'] as String? ?? '',
       date: DateTime.parse(map['date'] as String),

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../db/db_helper.dart';
 import '../models/employee.dart';
+import '../services/backend_service.dart';
 import '../state/session.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -24,7 +24,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _reload() async {
     setState(() => _loading = true);
-    final employees = await DbHelper.instance.getEmployees();
+    final actingId = context.read<AppSession>().employee!.id;
+    final employees = await BackendService.instance.getEmployees(actingId);
     if (!mounted) return;
     setState(() {
       _employees = employees;
@@ -41,17 +42,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _confirmDelete(Employee employee) async {
-    if (employee.isAdmin) {
-      final otherAdmins = await DbHelper.instance.countAdmins(excludingId: employee.id);
-      if (otherAdmins == 0) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('لا يمكن حذف آخر حساب مدير في النظام')),
-        );
-        return;
-      }
-    }
-    if (!mounted) return;
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -67,15 +57,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ],
       ),
     );
-    if (ok == true) {
-      await DbHelper.instance.deleteEmployee(employee.id!);
+    if (ok != true) return;
+    if (!mounted) return;
+    try {
+      final actingId = context.read<AppSession>().employee!.id;
+      await BackendService.instance.deleteEmployee(actingEmployeeId: actingId, targetId: employee.id);
       _reload();
+    } on BackendException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final currentId = context.read<Session>().employee?.id;
+    final currentId = context.read<AppSession>().employee?.id;
     return Scaffold(
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _openEditor(),
@@ -183,22 +179,19 @@ class _EmployeeEditorDialogState extends State<_EmployeeEditorDialog> {
       _error = null;
     });
     try {
-      final employee = Employee(
+      final actingId = context.read<AppSession>().employee!.id;
+      await BackendService.instance.saveEmployee(
+        actingEmployeeId: actingId,
         id: widget.employee?.id,
         name: _name.text.trim(),
         code: _code.text.trim(),
-        passwordHash: widget.employee?.passwordHash ?? '',
+        password: _password.text.isEmpty ? null : _password.text,
         role: _role,
         active: _active,
-        createdAt: widget.employee?.createdAt ?? DateTime.now(),
-      );
-      await DbHelper.instance.saveEmployee(
-        employee,
-        newPassword: _password.text.isEmpty ? null : _password.text,
       );
       if (!mounted) return;
       Navigator.pop(context, true);
-    } on StateError catch (e) {
+    } on BackendException catch (e) {
       setState(() => _error = e.message);
     } catch (e) {
       setState(() => _error = 'حدث خطأ أثناء الحفظ');

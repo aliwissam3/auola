@@ -1,9 +1,9 @@
 import 'package:flutter/foundation.dart';
 
-import '../db/db_helper.dart';
 import '../models/employee.dart';
+import '../services/backend_service.dart';
 
-class Session extends ChangeNotifier {
+class AppSession extends ChangeNotifier {
   Employee? _employee;
 
   Employee? get employee => _employee;
@@ -14,13 +14,19 @@ class Session extends ChangeNotifier {
     if (code.trim().isEmpty || password.isEmpty) {
       return 'الرجاء إدخال الرمز وكلمة المرور';
     }
-    final employee = await DbHelper.instance.authenticate(code.trim(), password);
-    if (employee == null) {
-      return 'الرمز أو كلمة المرور غير صحيحة';
+    try {
+      final employee = await BackendService.instance.authenticate(code.trim(), password);
+      if (employee == null) {
+        return 'الرمز أو كلمة المرور غير صحيحة';
+      }
+      _employee = employee;
+      notifyListeners();
+      return null;
+    } on BackendException catch (e) {
+      return e.message;
+    } catch (e) {
+      return 'تعذر الاتصال بالخادم، تحقق من الإنترنت وحاول مجدداً';
     }
-    _employee = employee;
-    notifyListeners();
-    return null;
   }
 
   void logout() {

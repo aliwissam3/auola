@@ -30,7 +30,7 @@ class _LoginScreenState extends State<LoginScreen> {
       _loading = true;
       _error = null;
     });
-    final session = context.read<Session>();
+    final session = context.read<AppSession>();
     final error = await session.login(_codeController.text, _passwordController.text);
     if (!mounted) return;
     setState(() {

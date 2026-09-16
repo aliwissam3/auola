@@ -46,7 +46,7 @@ class _HomeShellState extends State<HomeShell> {
   }
 
   void _logout() {
-    context.read<Session>().logout();
+    context.read<AppSession>().logout();
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const LoginScreen()),
       (route) => false,
@@ -55,7 +55,7 @@ class _HomeShellState extends State<HomeShell> {
 
   @override
   Widget build(BuildContext context) {
-    final session = context.watch<Session>();
+    final session = context.watch<AppSession>();
     final items = _visibleItems(session.isAdmin);
     final index = _index.clamp(0, items.length - 1);
 

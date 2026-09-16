@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../db/db_helper.dart';
 import '../models/product.dart';
 import '../models/sale.dart';
+import '../services/backend_service.dart';
 import '../state/session.dart';
+
+const _pageSize = 50;
 
 class _CartLine {
   final Product product;
@@ -74,15 +77,18 @@ class _NewSaleTabState extends State<_NewSaleTab> {
   bool _loading = true;
   bool _saving = false;
   String? _message;
+  RealtimeChannel? _channel;
 
   @override
   void initState() {
     super.initState();
     _reloadProducts();
+    _channel = BackendService.instance.watchTable('products', _reloadProducts);
   }
 
   @override
   void dispose() {
+    if (_channel != null) BackendService.instance.unwatch(_channel!);
     _customerController.dispose();
     _paidController.dispose();
     super.dispose();
@@ -90,7 +96,7 @@ class _NewSaleTabState extends State<_NewSaleTab> {
 
   Future<void> _reloadProducts() async {
     setState(() => _loading = true);
-    final products = await DbHelper.instance.getProducts();
+    final products = await BackendService.instance.getProducts(search: _search, limit: _pageSize);
     if (!mounted) return;
     setState(() {
       _products = products;
@@ -126,7 +132,6 @@ class _NewSaleTabState extends State<_NewSaleTab> {
       setState(() => _message = 'أضف منتجات إلى السلة أولاً');
       return;
     }
-    // Validate stock availability.
     for (final line in _cart) {
       if (line.quantity > line.product.quantity) {
         setState(() => _message = 'الكمية المتوفرة من "${line.product.name}" غير كافية');
@@ -146,11 +151,11 @@ class _NewSaleTabState extends State<_NewSaleTab> {
       _message = null;
     });
 
-    final session = context.read<Session>();
+    final session = context.read<AppSession>();
     final employee = session.employee!;
 
     final sale = Sale(
-      employeeId: employee.id!,
+      employeeId: employee.id,
       employeeName: employee.name,
       customerName: customerName,
       date: DateTime.now(),
@@ -167,25 +172,30 @@ class _NewSaleTabState extends State<_NewSaleTab> {
             ))
         .toList();
 
-    await DbHelper.instance.createSale(sale: sale, items: items);
-
-    if (!mounted) return;
-    setState(() {
-      _cart.clear();
-      _customerController.clear();
-      _paidController.clear();
-      _saving = false;
-      _message = 'تم حفظ عملية البيع بنجاح';
-    });
-    _reloadProducts();
+    try {
+      await BackendService.instance.createSale(sale: sale, items: items);
+      if (!mounted) return;
+      setState(() {
+        _cart.clear();
+        _customerController.clear();
+        _paidController.clear();
+        _message = 'تم حفظ عملية البيع بنجاح';
+      });
+      _reloadProducts();
+    } on BackendException catch (e) {
+      if (!mounted) return;
+      setState(() => _message = e.message);
+      _reloadProducts();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _message = 'تعذر إتمام البيع، تحقق من الاتصال وحاول مجدداً');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final filtered = _search.isEmpty
-        ? _products
-        : _products.where((p) => p.name.toLowerCase().contains(_search.toLowerCase())).toList();
-
     return LayoutBuilder(builder: (context, constraints) {
       final wide = constraints.maxWidth >= 720;
       final productList = Column(
@@ -199,16 +209,19 @@ class _NewSaleTabState extends State<_NewSaleTab> {
                 border: OutlineInputBorder(),
                 isDense: true,
               ),
-              onChanged: (v) => setState(() => _search = v),
+              onChanged: (v) {
+                _search = v;
+                _reloadProducts();
+              },
             ),
           ),
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
                 : ListView.builder(
-                    itemCount: filtered.length,
+                    itemCount: _products.length,
                     itemBuilder: (context, index) {
-                      final product = filtered[index];
+                      final product = _products[index];
                       final outOfStock = product.quantity <= 0;
                       return ListTile(
                         title: Text(product.name),
@@ -331,22 +344,46 @@ class _SalesHistoryTab extends StatefulWidget {
 }
 
 class _SalesHistoryTabState extends State<_SalesHistoryTab> {
-  List<Sale> _sales = [];
+  final List<Sale> _sales = [];
   bool _loading = true;
+  bool _loadingMore = false;
+  bool _hasMore = true;
+  RealtimeChannel? _channel;
 
   @override
   void initState() {
     super.initState();
     _reload();
+    _channel = BackendService.instance.watchTable('sales', _reload);
+  }
+
+  @override
+  void dispose() {
+    if (_channel != null) BackendService.instance.unwatch(_channel!);
+    super.dispose();
   }
 
   Future<void> _reload() async {
     setState(() => _loading = true);
-    final sales = await DbHelper.instance.getSales();
+    final sales = await BackendService.instance.getSales(limit: _pageSize);
     if (!mounted) return;
     setState(() {
-      _sales = sales;
+      _sales
+        ..clear()
+        ..addAll(sales);
+      _hasMore = sales.length == _pageSize;
       _loading = false;
+    });
+  }
+
+  Future<void> _loadMore() async {
+    setState(() => _loadingMore = true);
+    final more = await BackendService.instance.getSales(limit: _pageSize, offset: _sales.length);
+    if (!mounted) return;
+    setState(() {
+      _sales.addAll(more);
+      _hasMore = more.length == _pageSize;
+      _loadingMore = false;
     });
   }
 
@@ -358,8 +395,19 @@ class _SalesHistoryTabState extends State<_SalesHistoryTab> {
     return RefreshIndicator(
       onRefresh: _reload,
       child: ListView.builder(
-        itemCount: _sales.length,
+        itemCount: _sales.length + 1,
         itemBuilder: (context, index) {
+          if (index == _sales.length) {
+            if (!_hasMore) return const SizedBox.shrink();
+            return Padding(
+              padding: const EdgeInsets.all(16),
+              child: Center(
+                child: _loadingMore
+                    ? const CircularProgressIndicator()
+                    : OutlinedButton(onPressed: _loadMore, child: const Text('تحميل المزيد')),
+              ),
+            );
+          }
           final sale = _sales[index];
           return Card(
             margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -371,7 +419,7 @@ class _SalesHistoryTabState extends State<_SalesHistoryTab> {
               ),
               children: [
                 FutureBuilder(
-                  future: DbHelper.instance.getSaleItems(sale.id!),
+                  future: BackendService.instance.getSaleItems(sale.id!),
                   builder: (context, snapshot) {
                     if (!snapshot.hasData) {
                       return const Padding(
@@ -407,6 +455,7 @@ String _fmt(double value) {
 }
 
 String _formatDate(DateTime date) {
-  return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')} '
-      '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+  final local = date.toLocal();
+  return '${local.year}-${local.month.toString().padLeft(2, '0')}-${local.day.toString().padLeft(2, '0')} '
+      '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
 }

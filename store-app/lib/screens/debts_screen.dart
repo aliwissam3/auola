@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../db/db_helper.dart';
 import '../models/customer.dart';
 import '../models/debt_transaction.dart';
+import '../services/backend_service.dart';
 
 class DebtsScreen extends StatefulWidget {
   const DebtsScreen({super.key});
@@ -14,16 +15,27 @@ class DebtsScreen extends StatefulWidget {
 class _DebtsScreenState extends State<DebtsScreen> {
   List<MapEntry<Customer, double>> _balances = [];
   bool _loading = true;
+  RealtimeChannel? _debtsChannel;
+  RealtimeChannel? _customersChannel;
 
   @override
   void initState() {
     super.initState();
     _reload();
+    _debtsChannel = BackendService.instance.watchTable('debt_transactions', _reload);
+    _customersChannel = BackendService.instance.watchTable('customers', _reload);
+  }
+
+  @override
+  void dispose() {
+    if (_debtsChannel != null) BackendService.instance.unwatch(_debtsChannel!);
+    if (_customersChannel != null) BackendService.instance.unwatch(_customersChannel!);
+    super.dispose();
   }
 
   Future<void> _reload() async {
     setState(() => _loading = true);
-    final balances = await DbHelper.instance.getCustomerBalances();
+    final balances = await BackendService.instance.getCustomerBalances();
     if (!mounted) return;
     setState(() {
       _balances = balances;
@@ -73,25 +85,28 @@ class _DebtsScreenState extends State<DebtsScreen> {
                 ? const Center(child: CircularProgressIndicator())
                 : _balances.isEmpty
                     ? const Center(child: Text('لا توجد ديون حالياً'))
-                    : ListView.builder(
-                        padding: const EdgeInsets.only(bottom: 80),
-                        itemCount: _balances.length,
-                        itemBuilder: (context, index) {
-                          final entry = _balances[index];
-                          return Card(
-                            margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                            child: ListTile(
-                              leading: const CircleAvatar(child: Icon(Icons.person_outline)),
-                              title: Text(entry.key.name),
-                              subtitle: entry.key.phone.isNotEmpty ? Text(entry.key.phone) : null,
-                              trailing: Text(
-                                _fmt(entry.value),
-                                style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.red),
+                    : RefreshIndicator(
+                        onRefresh: _reload,
+                        child: ListView.builder(
+                          padding: const EdgeInsets.only(bottom: 80),
+                          itemCount: _balances.length,
+                          itemBuilder: (context, index) {
+                            final entry = _balances[index];
+                            return Card(
+                              margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              child: ListTile(
+                                leading: const CircleAvatar(child: Icon(Icons.person_outline)),
+                                title: Text(entry.key.name),
+                                subtitle: entry.key.phone.isNotEmpty ? Text(entry.key.phone) : null,
+                                trailing: Text(
+                                  _fmt(entry.value),
+                                  style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.red),
+                                ),
+                                onTap: () => _openCustomer(entry.key, entry.value),
                               ),
-                              onTap: () => _openCustomer(entry.key, entry.value),
-                            ),
-                          );
-                        },
+                            );
+                          },
+                        ),
                       ),
           ),
         ],
@@ -137,9 +152,15 @@ class _AddDebtDialogState extends State<_AddDebtDialog> {
       _saving = true;
       _error = null;
     });
-    await DbHelper.instance.addManualDebt(customerName: name, amount: amount, note: _note.text.trim());
-    if (!mounted) return;
-    Navigator.pop(context, true);
+    try {
+      await BackendService.instance.addManualDebt(customerName: name, amount: amount, note: _note.text.trim());
+      if (!mounted) return;
+      Navigator.pop(context, true);
+    } on BackendException catch (e) {
+      setState(() => _error = e.message);
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   @override
@@ -187,6 +208,7 @@ class _CustomerDebtDialogState extends State<_CustomerDebtDialog> {
   bool _loading = true;
   final _paymentController = TextEditingController();
   bool _changed = false;
+  String? _error;
 
   @override
   void initState() {
@@ -202,7 +224,7 @@ class _CustomerDebtDialogState extends State<_CustomerDebtDialog> {
 
   Future<void> _reload() async {
     setState(() => _loading = true);
-    final txns = await DbHelper.instance.getTransactionsForCustomer(widget.customer.id!);
+    final txns = await BackendService.instance.getTransactionsForCustomer(widget.customer.id);
     if (!mounted) return;
     setState(() {
       _transactions = txns;
@@ -213,10 +235,14 @@ class _CustomerDebtDialogState extends State<_CustomerDebtDialog> {
   Future<void> _addPayment() async {
     final amount = double.tryParse(_paymentController.text);
     if (amount == null || amount <= 0) return;
-    await DbHelper.instance.addDebtPayment(customerId: widget.customer.id!, amount: amount);
-    _paymentController.clear();
-    _changed = true;
-    _reload();
+    try {
+      await BackendService.instance.addDebtPayment(customerId: widget.customer.id, amount: amount);
+      _paymentController.clear();
+      _changed = true;
+      _reload();
+    } on BackendException catch (e) {
+      setState(() => _error = e.message);
+    }
   }
 
   @override
@@ -243,6 +269,10 @@ class _CustomerDebtDialogState extends State<_CustomerDebtDialog> {
                 FilledButton(onPressed: _addPayment, child: const Text('دفع')),
               ],
             ),
+            if (_error != null) ...[
+              const SizedBox(height: 4),
+              Text(_error!, style: const TextStyle(color: Colors.red)),
+            ],
             const Divider(height: 24),
             Expanded(
               child: _loading
@@ -258,7 +288,7 @@ class _CustomerDebtDialogState extends State<_CustomerDebtDialog> {
                             color: t.isCharge ? Colors.red : Colors.green,
                           ),
                           title: Text(t.isCharge ? 'دين جديد' : 'دفعة'),
-                          subtitle: Text('${t.date.year}-${t.date.month.toString().padLeft(2, '0')}-${t.date.day.toString().padLeft(2, '0')}${t.note.isNotEmpty ? " • ${t.note}" : ""}'),
+                          subtitle: Text('${t.date.toLocal().year}-${t.date.toLocal().month.toString().padLeft(2, '0')}-${t.date.toLocal().day.toString().padLeft(2, '0')}${t.note.isNotEmpty ? " • ${t.note}" : ""}'),
                           trailing: Text(_fmt(t.amount)),
                         );
                       },

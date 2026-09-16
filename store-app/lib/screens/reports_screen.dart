@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../db/db_helper.dart';
 import '../models/product.dart';
+import '../services/backend_service.dart';
 
 enum _Period { today, week, month, all }
 
@@ -31,14 +31,13 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
   Future<_ReportData> _load() async {
     final from = _from;
-    final totalSales = await DbHelper.instance.getTotalSales(from: from);
-    final totalProfit = await DbHelper.instance.getTotalProfit(from: from);
-    final topProducts = await DbHelper.instance.getTopProducts(from: from);
-    final totalDebt = await DbHelper.instance.getTotalOutstandingDebt();
-    final lowStock = await DbHelper.instance.getLowStockProducts();
+    final summary = await BackendService.instance.getReportSummary(from: from);
+    final topProducts = await BackendService.instance.getTopProducts(from: from);
+    final totalDebt = await BackendService.instance.getTotalOutstandingDebt();
+    final lowStock = await BackendService.instance.getLowStockProducts();
     return _ReportData(
-      totalSales: totalSales,
-      totalProfit: totalProfit,
+      totalSales: summary.totalSales,
+      totalProfit: summary.totalProfit,
       topProducts: topProducts,
       totalDebt: totalDebt,
       lowStock: lowStock,

@@ -35,20 +35,15 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
 
-  # Local database (works on Android natively, and on Windows via the ffi backend)
-  sqflite: ^2.4.1
-  sqflite_common_ffi: ^2.3.4+4
-  path: ^1.9.1
-  path_provider: ^2.1.5
+  # Shared backend: one Supabase project for Android, Windows and web, so
+  # every device sees the same products/sales/debts as soon as they change.
+  supabase_flutter: ^2.8.0
 
   # State management
   provider: ^6.1.2
 
   # Formatting dates/numbers in Arabic
   intl: ^0.20.2
-
-  # Password hashing for employee accounts
-  crypto: ^3.0.6
 
 dev_dependencies:
   flutter_test:

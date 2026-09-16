@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'db/db_helper.dart';
-import 'screens/login_screen.dart';
+import 'config/supabase_config.dart';
+import 'screens/startup_gate.dart';
 import 'state/session.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  DbHelper.initPlatform();
+  if (SupabaseConfig.isConfigured) {
+    await Supabase.initialize(url: SupabaseConfig.url, publishableKey: SupabaseConfig.anonKey);
+  }
   runApp(const StoreApp());
 }
 
@@ -17,7 +20,7 @@ class StoreApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (_) => Session(),
+      create: (_) => AppSession(),
       child: MaterialApp(
         title: 'إدارة المحل',
         debugShowCheckedModeBanner: false,
@@ -32,7 +35,7 @@ class StoreApp extends StatelessWidget {
             child: child ?? const SizedBox.shrink(),
           );
         },
-        home: const LoginScreen(),
+        home: const StartupGate(),
       ),
     );
   }

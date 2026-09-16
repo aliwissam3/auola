@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../db/db_helper.dart';
 import '../models/product.dart';
+import '../services/backend_service.dart';
+
+const _pageSize = 50;
 
 class ProductsScreen extends StatefulWidget {
   const ProductsScreen({super.key});
@@ -11,23 +14,51 @@ class ProductsScreen extends StatefulWidget {
 }
 
 class _ProductsScreenState extends State<ProductsScreen> {
-  List<Product> _products = [];
+  final List<Product> _products = [];
   bool _loading = true;
+  bool _loadingMore = false;
+  bool _hasMore = true;
   String _search = '';
+  RealtimeChannel? _channel;
 
   @override
   void initState() {
     super.initState();
     _reload();
+    _channel = BackendService.instance.watchTable('products', _reload);
+  }
+
+  @override
+  void dispose() {
+    if (_channel != null) BackendService.instance.unwatch(_channel!);
+    super.dispose();
   }
 
   Future<void> _reload() async {
     setState(() => _loading = true);
-    final products = await DbHelper.instance.getProducts(search: _search);
+    final products = await BackendService.instance.getProducts(search: _search, limit: _pageSize);
     if (!mounted) return;
     setState(() {
-      _products = products;
+      _products
+        ..clear()
+        ..addAll(products);
+      _hasMore = products.length == _pageSize;
       _loading = false;
+    });
+  }
+
+  Future<void> _loadMore() async {
+    setState(() => _loadingMore = true);
+    final more = await BackendService.instance.getProducts(
+      search: _search,
+      limit: _pageSize,
+      offset: _products.length,
+    );
+    if (!mounted) return;
+    setState(() {
+      _products.addAll(more);
+      _hasMore = more.length == _pageSize;
+      _loadingMore = false;
     });
   }
 
@@ -56,7 +87,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
       ),
     );
     if (ok == true) {
-      await DbHelper.instance.deleteProduct(product.id!);
+      await BackendService.instance.deleteProduct(product.id!);
       _reload();
     }
   }
@@ -91,43 +122,57 @@ class _ProductsScreenState extends State<ProductsScreen> {
                 ? const Center(child: CircularProgressIndicator())
                 : _products.isEmpty
                     ? const Center(child: Text('لا توجد منتجات بعد'))
-                    : ListView.builder(
-                        padding: const EdgeInsets.only(bottom: 80),
-                        itemCount: _products.length,
-                        itemBuilder: (context, index) {
-                          final product = _products[index];
-                          return Card(
-                            margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                            child: ListTile(
-                              leading: CircleAvatar(
-                                backgroundColor: product.isLowStock ? Colors.red.shade100 : Colors.teal.shade100,
-                                child: Icon(
-                                  Icons.inventory_2,
-                                  color: product.isLowStock ? Colors.red : Colors.teal,
+                    : RefreshIndicator(
+                        onRefresh: _reload,
+                        child: ListView.builder(
+                          padding: const EdgeInsets.only(bottom: 80),
+                          itemCount: _products.length + 1,
+                          itemBuilder: (context, index) {
+                            if (index == _products.length) {
+                              if (!_hasMore) return const SizedBox.shrink();
+                              return Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: Center(
+                                  child: _loadingMore
+                                      ? const CircularProgressIndicator()
+                                      : OutlinedButton(onPressed: _loadMore, child: const Text('تحميل المزيد')),
+                                ),
+                              );
+                            }
+                            final product = _products[index];
+                            return Card(
+                              margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              child: ListTile(
+                                leading: CircleAvatar(
+                                  backgroundColor: product.isLowStock ? Colors.red.shade100 : Colors.teal.shade100,
+                                  child: Icon(
+                                    Icons.inventory_2,
+                                    color: product.isLowStock ? Colors.red : Colors.teal,
+                                  ),
+                                ),
+                                title: Text(product.name),
+                                subtitle: Text(
+                                  '${product.category} • الكمية: ${_fmt(product.quantity)} ${product.unit}\n'
+                                  'شراء: ${_fmt(product.buyPrice)} — بيع: ${_fmt(product.sellPrice)}',
+                                ),
+                                isThreeLine: true,
+                                trailing: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      icon: const Icon(Icons.edit_outlined),
+                                      onPressed: () => _openEditor(product: product),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.delete_outline, color: Colors.red),
+                                      onPressed: () => _confirmDelete(product),
+                                    ),
+                                  ],
                                 ),
                               ),
-                              title: Text(product.name),
-                              subtitle: Text(
-                                '${product.category} • الكمية: ${_fmt(product.quantity)} ${product.unit}\n'
-                                'شراء: ${_fmt(product.buyPrice)} — بيع: ${_fmt(product.sellPrice)}',
-                              ),
-                              isThreeLine: true,
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.edit_outlined),
-                                    onPressed: () => _openEditor(product: product),
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.delete_outline, color: Colors.red),
-                                    onPressed: () => _confirmDelete(product),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
+                            );
+                          },
+                        ),
                       ),
           ),
         ],
@@ -202,11 +247,12 @@ class _ProductEditorDialogState extends State<_ProductEditorDialog> {
         quantity: double.parse(_quantity.text),
         unit: _unit.text.trim().isEmpty ? 'قطعة' : _unit.text.trim(),
         lowStockThreshold: double.tryParse(_lowStock.text) ?? 5,
-        createdAt: widget.product?.createdAt ?? DateTime.now(),
       );
-      await DbHelper.instance.saveProduct(product);
+      await BackendService.instance.saveProduct(product);
       if (!mounted) return;
       Navigator.pop(context, true);
+    } on BackendException catch (e) {
+      setState(() => _error = e.message);
     } catch (e) {
       setState(() => _error = 'حدث خطأ أثناء الحفظ');
     } finally {
