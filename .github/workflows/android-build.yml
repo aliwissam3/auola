@@ -16,6 +16,9 @@ on:
       - ".github/workflows/android-build.yml"
   workflow_dispatch: {}
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -41,3 +44,21 @@ jobs:
           name: saydaliti-android
           path: build/app/outputs/flutter-apk/app-release.apk
           retention-days: 30
+
+      # Actions-artifact downloads redirect to Azure Blob Storage, which
+      # the sandbox this app is normally developed in has no route to
+      # (only plain github.com git/API traffic is reachable there) - an
+      # orphan branch holding just the latest APK is fetchable the same
+      # way every other push/pull in this project already works.
+      - name: Publish APK to the android-apk-latest branch
+        run: |
+          cd "$(mktemp -d)"
+          cp "$GITHUB_WORKSPACE/build/app/outputs/flutter-apk/app-release.apk" ./saydaliti.apk
+          git init -q
+          git config user.email "actions@github.com"
+          git config user.name "GitHub Actions"
+          git checkout -q -b android-apk-latest
+          git add saydaliti.apk
+          git commit -q -m "Latest Android APK build (run ${{ github.run_id }})"
+          git remote add origin "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
+          git push -f origin android-apk-latest
