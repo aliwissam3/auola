@@ -1,5 +1,3 @@
-import 'dart:html' as html;
-
 import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
@@ -87,11 +85,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
     );
     if (confirmed != true) return;
+    // main.dart's bootstrap listens for this and drops the now-signed-out
+    // pharmacy's AppData/repositories, so the next sign-in starts every
+    // repository's load() fresh instead of reusing stale in-memory data.
     await StoreAccountService.instance.signOut();
-    // Simplest way to guarantee every screen/repo forgets the old
-    // pharmacy's data rather than trying to tear down 20+ live Supabase
-    // realtime subscriptions and in-memory repositories by hand.
-    if (kIsWeb) html.window.location.reload();
   }
 
   Future<void> _scan() async {

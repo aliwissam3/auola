@@ -73,6 +73,31 @@ class _AppBootstrapState extends State<_AppBootstrap> {
   late final Future<ThemeProvider> _coreFuture = _initCore();
   Future<_AppServices>? _servicesFuture;
 
+  @override
+  void initState() {
+    super.initState();
+    StoreAccountService.instance.addListener(_onAccountChanged);
+  }
+
+  @override
+  void dispose() {
+    StoreAccountService.instance.removeListener(_onAccountChanged);
+    super.dispose();
+  }
+
+  /// Drops the signed-out pharmacy's already-loaded [AppData] (and every
+  /// repository's in-memory items/Supabase realtime channel with it) so
+  /// the next sign-in on this same device — a different pharmacy, or the
+  /// same one again — starts every repository's load() from scratch
+  /// instead of silently reusing whatever the previous account already
+  /// had sitting in memory (repositories skip load() entirely once
+  /// [SupabaseRepository.isLoaded] is true).
+  void _onAccountChanged() {
+    if (!StoreAccountService.instance.isSignedIn && _servicesFuture != null) {
+      setState(() => _servicesFuture = null);
+    }
+  }
+
   /// Setup that doesn't belong to any one pharmacy — must finish before
   /// even the register/sign-in screen can be shown (it needs a loaded
   /// theme, and Supabase.initialize() must run before anything touches
