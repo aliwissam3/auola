@@ -1,0 +1,128 @@
+name: pharmacy_manager
+description: "نظام صيدليتي - إدارة صيدليات متكامل (POS، مخزون، ديون، موظفين، مشتريات وOCR)"
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.10.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  # State management
+  provider: ^6.1.2
+
+  # Local persistence (works on Windows/Android/iOS/Web/macOS/Linux)
+  shared_preferences: ^2.2.3
+
+  # Local persistence for the actual store data caches (products, sales,
+  # etc.) — backed by IndexedDB on web, which has a per-origin quota in
+  # the hundreds of MB, versus localStorage's ~5-10MB (shared_preferences
+  # on web). A single pharmacy's full catalog/history would risk hitting
+  # that ceiling over time; Hive doesn't.
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+
+  # Dates / RTL number & date formatting
+  # Pinned loosely: flutter_localizations from a recent Flutter SDK
+  # requires a newer intl than 0.19.x, and `flutter pub get` fails hard
+  # on that mismatch (no auto-resolution) — let pub pick within 0.20.x.
+  intl: ^0.20.2
+
+  # Receipt / product photo capture (camera + gallery, all platforms)
+  image_picker: ^1.1.2
+
+  # OCR text recognition for purchase receipts (Android/iOS only,
+  # guarded behind Platform checks — no-ops safely on Windows/Web)
+  google_mlkit_text_recognition: ^0.13.0
+
+  # On-screen scannable barcode for each employee's quick-login card,
+  # plus PDF generation/printing for the printable ID card. All three
+  # are pure Dart/platform-channel packages with no native SDK
+  # requirements, so they build cleanly on every target platform.
+  barcode_widget: ^2.0.4
+  pdf: ^3.11.1
+  printing: ^5.13.3
+
+  cupertino_icons: ^1.0.8
+
+  # Modern Arabic/Latin variable typography (Cairo) for the "Pro Max"
+  # design system — loaded once and cached, works on every platform
+  # this app ships to (falls back to the system font offline).
+  google_fonts: ^6.2.1
+
+  # Cloud sync backend (multi-device data): a thin Postgres/Realtime
+  # client — HTTP-based, so it behaves the same on Windows/Android
+  # instead of the native-plugin-heavy path Firebase needs on desktop.
+  supabase_flutter: ^2.8.0
+
+  # Camera-based barcode scanning for phones (no physical USB scanner
+  # there) — Android/iOS only; the Windows POS search field keeps using
+  # a plain USB "keyboard emulation" scanner, unaffected by this.
+  mobile_scanner: ^6.0.2
+
+  # Embeds a tiny local HTTP server inside the desktop app itself, so it
+  # can host this app's own `flutter build web` output over the LAN
+  # without a separate `flutter run -d chrome` process — see
+  # lib/services/local_web_server_service.dart. Pure Dart, no native SDK
+  # requirements.
+  shelf: ^1.4.2
+  shelf_static: ^1.1.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+  # Generates the real app icon (taskbar/exe on Windows, launcher icon on
+  # Android) from assets/icon/app_icon.png for every platform in one run
+  # — see the instructions at the bottom of this file.
+  flutter_launcher_icons: ^0.14.1
+
+flutter:
+  uses-material-design: true
+
+  # Add real asset files under assets/images/ then re-enable:
+  # assets:
+  #   - assets/images/
+  assets:
+    - assets/icon/app_icon.png
+
+  # Cairo bundled locally (not fetched from Google Fonts at runtime) so
+  # text renders correctly with zero internet access - required since
+  # this app must work fully offline. Same physical variable-font file
+  # registered at each weight the theme uses; Skia/CanvasKit resolves
+  # the correct instance from the font's own weight axis.
+  fonts:
+    - family: Cairo
+      fonts:
+        - asset: assets/fonts/Cairo-Variable.ttf
+          weight: 400
+        - asset: assets/fonts/Cairo-Variable.ttf
+          weight: 500
+        - asset: assets/fonts/Cairo-Variable.ttf
+          weight: 600
+        - asset: assets/fonts/Cairo-Variable.ttf
+          weight: 700
+        - asset: assets/fonts/Cairo-Variable.ttf
+          weight: 800
+
+# ---------------------------------------------------------------------------
+# App icon generation (run once, or whenever assets/icon/app_icon.png changes)
+# ---------------------------------------------------------------------------
+# 1) flutter pub get
+# 2) dart run flutter_launcher_icons
+# This overwrites the placeholder Flutter-logo icons with the pharmacy icon
+# for every platform folder that already exists (android/, windows/, ...).
+# If you haven't run `flutter create .` yet, do that FIRST — this tool only
+# updates platform folders that already exist, it doesn't create them.
+flutter_launcher_icons:
+  image_path: "assets/icon/app_icon.png"
+  android: true
+  ios: true
+  windows:
+    generate: true
+  web:
+    generate: true
